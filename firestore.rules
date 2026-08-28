@@ -1,0 +1,128 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function getUserRole() {
+      return isAuthenticated() ? getUserData().role : null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    function isCleaner() {
+      return isAuthenticated() && getUserRole() == 'cleaner';
+    }
+    
+    function isTeacher() {
+      return isAuthenticated() && getUserRole() == 'teacher';
+    }
+
+    function isCleanerOrAdmin() {
+      return isAdmin() || isCleaner();
+    }
+
+    // USERS COLLECTION
+    // Admin has full control. Users can read their own profile, or read all users if cleaner/admin.
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (request.auth.uid == userId || isCleanerOrAdmin() || isTeacher());
+      allow create, update, delete: if isAdmin() || (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isActive']));
+    }
+
+    // CLASSES COLLECTION
+    // Admin manages classes. Cleaner & Teachers can read classes.
+    match /classes/{classId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // TEACHER CLASS ASSIGNMENTS
+    // Admin manages. Teachers can read their assignments. Cleaner can read.
+    match /teacher_class_assignments/{assignmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    // AREAS COLLECTION
+    // Admin and Cleaner can manage areas. Teachers can view areas.
+    match /areas/{areaId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isCleanerOrAdmin();
+    }
+
+    // SCHEDULES COLLECTION
+    // Admin and Cleaner manage schedules. Teachers can read schedules.
+    match /schedules/{scheduleId} {
+      allow read: if isAuthenticated();
+      allow create, update, delete: if isCleanerOrAdmin();
+    }
+
+    // INSPECTIONS & INSPECTION ITEMS COLLECTION
+    // Cleaner & Admin can create & update inspections. Teachers are READ-ONLY.
+    match /inspections/{inspectionId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isCleanerOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /inspection_items/{itemId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isCleanerOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // VIOLATION TYPES & PENALTY RULES
+    match /violation_types/{typeId} {
+      allow read: if isAuthenticated();
+      allow write: if isCleanerOrAdmin();
+    }
+
+    match /penalty_rules/{ruleId} {
+      allow read: if isAuthenticated();
+      allow write: if isCleanerOrAdmin();
+    }
+
+    // VIOLATIONS & PENALTIES
+    // Cleaner and Admin manage violations and penalties. Teachers are strictly READ-ONLY.
+    match /violations/{violationId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isCleanerOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /penalties/{penaltyId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isCleanerOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // PHOTOS COLLECTION
+    match /photos/{photoId} {
+      allow read: if isAuthenticated();
+      allow create: if isCleanerOrAdmin();
+      allow update, delete: if isCleanerOrAdmin();
+    }
+
+    // INVENTORIES & INVENTORY LOGS
+    // Cleaner & Admin manage inventories and logs. Teachers cannot modify.
+    match /inventories/{inventoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isCleanerOrAdmin();
+    }
+
+    match /inventory_logs/{logId} {
+      allow read: if isAuthenticated();
+      allow create: if isCleanerOrAdmin();
+      allow update, delete: if isAdmin();
+    }
+  }
+}

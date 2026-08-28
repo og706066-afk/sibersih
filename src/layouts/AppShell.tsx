@@ -63,17 +63,29 @@ export const AppShell: React.FC = () => {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-slate-400 text-[11px]">Role:</span>
-            <select
-              value={currentUser.role}
-              onChange={(e) => switchDemoRole(e.target.value as UserRole)}
-              className="bg-slate-800 text-emerald-300 rounded px-1.5 py-0.5 text-xs border border-slate-700 focus:outline-none cursor-pointer"
-            >
-              <option value="cleaner">Bagian Kebersihan</option>
-              <option value="teacher">Ustadz/Ustadzah</option>
-              <option value="admin">Developer/Admin</option>
-            </select>
+            {isFirebaseActive ? (
+              <span className="bg-slate-800 text-emerald-300 rounded px-2 py-0.5 text-xs border border-slate-700 font-medium">
+                {currentUser.role === 'admin'
+                  ? 'Developer/Admin'
+                  : currentUser.role === 'teacher'
+                  ? 'Ustadz/Ustadzah'
+                  : 'Bagian Kebersihan'}
+              </span>
+            ) : (
+              <select
+                value={currentUser.role}
+                onChange={(e) => switchDemoRole(e.target.value as UserRole)}
+                className="bg-slate-800 text-amber-300 rounded px-1.5 py-0.5 text-xs border border-slate-700 focus:outline-none cursor-pointer"
+                title="Pilih role untuk simulasi demo Ujikom"
+              >
+                <option value="cleaner">Bagian Kebersihan</option>
+                <option value="teacher">Ustadz/Ustadzah</option>
+                <option value="admin">Developer/Admin</option>
+              </select>
+            )}
           </div>
         </div>
+
 
         {/* Top Navigation Bar */}
         <TopBar

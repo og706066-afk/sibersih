@@ -1,9 +1,10 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppShell } from './layouts/AppShell';
 import { LoginPage } from './pages/auth/LoginPage';
 import { LoadingState } from './components/common';
+import type { UserRole } from './types';
 
 // Cleaner Pages
 import { CleanerDashboard } from './pages/cleaner/CleanerDashboard';
@@ -47,7 +48,12 @@ const RootRedirect: React.FC = () => {
   }
 };
 
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+interface ProtectedRouteProps {
+  children?: React.ReactNode;
+  allowedRoles?: UserRole[];
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
   const { currentUser, isLoading } = useAuth();
 
   if (isLoading) {
@@ -58,7 +64,18 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <Navigate to="/login" replace />;
   }
 
-  return <>{children}</>;
+  if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
+    // FIX 1: If role is not allowed, redirect to the user's appropriate role dashboard
+    const fallbackPath =
+      currentUser.role === 'admin'
+        ? '/admin'
+        : currentUser.role === 'teacher'
+        ? '/teacher'
+        : '/cleaner';
+    return <Navigate to={fallbackPath} replace />;
+  }
+
+  return children ? <>{children}</> : <Outlet />;
 };
 
 export function App() {
@@ -80,25 +97,31 @@ export function App() {
               </ProtectedRoute>
             }
           >
-            {/* Role 2: Bagian Kebersihan */}
-            <Route path="/cleaner" element={<CleanerDashboard />} />
-            <Route path="/cleaner/inspections" element={<InspectionsPage />} />
-            <Route path="/cleaner/violations" element={<ViolationsPage />} />
-            <Route path="/cleaner/penalties" element={<PenaltiesPage />} />
-            <Route path="/cleaner/inventory" element={<InventoryPage />} />
+            {/* FIX 1: Role 2: Bagian Kebersihan Route Guard */}
+            <Route element={<ProtectedRoute allowedRoles={['cleaner']} />}>
+              <Route path="/cleaner" element={<CleanerDashboard />} />
+              <Route path="/cleaner/inspections" element={<InspectionsPage />} />
+              <Route path="/cleaner/violations" element={<ViolationsPage />} />
+              <Route path="/cleaner/penalties" element={<PenaltiesPage />} />
+              <Route path="/cleaner/inventory" element={<InventoryPage />} />
+            </Route>
 
-            {/* Role 3: Ustadz / Ustadzah (Read-Only) */}
-            <Route path="/teacher" element={<TeacherDashboard />} />
-            <Route path="/teacher/history" element={<TeacherHistoryPage />} />
-            <Route path="/teacher/violations" element={<TeacherViolationsPage />} />
-            <Route path="/teacher/profile" element={<TeacherProfilePage />} />
+            {/* FIX 1: Role 3: Ustadz / Ustadzah (Read-Only) Route Guard */}
+            <Route element={<ProtectedRoute allowedRoles={['teacher']} />}>
+              <Route path="/teacher" element={<TeacherDashboard />} />
+              <Route path="/teacher/history" element={<TeacherHistoryPage />} />
+              <Route path="/teacher/violations" element={<TeacherViolationsPage />} />
+              <Route path="/teacher/profile" element={<TeacherProfilePage />} />
+            </Route>
 
-            {/* Role 1: Developer / Admin */}
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/users" element={<AdminUsersPage />} />
-            <Route path="/admin/areas" element={<AdminAreasPage />} />
-            <Route path="/admin/violations" element={<AdminViolationsRulesPage />} />
-            <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            {/* FIX 1: Role 1: Developer / Admin Route Guard */}
+            <Route element={<ProtectedRoute allowedRoles={['admin']} />}>
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/users" element={<AdminUsersPage />} />
+              <Route path="/admin/areas" element={<AdminAreasPage />} />
+              <Route path="/admin/violations" element={<AdminViolationsRulesPage />} />
+              <Route path="/admin/settings" element={<AdminSettingsPage />} />
+            </Route>
           </Route>
 
           {/* Catch All */}
@@ -108,5 +131,6 @@ export function App() {
     </AuthProvider>
   );
 }
+
 
 export default App;

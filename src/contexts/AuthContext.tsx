@@ -61,12 +61,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       } else {
         // Not authenticated
-        const savedDemo = localStorage.getItem('sibersih_demo_role') as UserRole | null;
-        if (savedDemo && DEMO_PROFILES[savedDemo]) {
-          setCurrentUser(DEMO_PROFILES[savedDemo]);
-        } else {
-          setCurrentUser(null);
-        }
+        // FIX 4: If Firebase is active and user == null, currentUser must be null (no fallback to demo profile)
+        setCurrentUser(null);
       }
       setIsLoading(false);
     });
@@ -74,21 +70,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, []);
 
-  const login = async (email: string, password: string): Promise<void> => {
-    if (!isFirebaseConfigured || !auth) {
+  const login = async (email: string, password: string): Promise<UserProfile> => {
+    if (!isFirebaseConfigured || !auth || !db) {
       // Demo authentication simulation
       const foundRole = (Object.keys(DEMO_PROFILES) as UserRole[]).find(
         (r) => DEMO_PROFILES[r].email.toLowerCase() === email.toLowerCase()
       );
       if (foundRole) {
-        setCurrentUser(DEMO_PROFILES[foundRole]);
+        const demoUser = DEMO_PROFILES[foundRole];
+        setCurrentUser(demoUser);
         localStorage.setItem('sibersih_demo_role', foundRole);
-        return;
+        return demoUser;
       }
       throw new Error('Email demo tidak cocok. Gunakan salah satu email demo yang tertera.');
     }
 
-    await signInWithEmailAndPassword(auth, email, password);
+    const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    const userDocRef = doc(db, 'users', userCredential.user.uid);
+    const userSnap = await getDoc(userDocRef);
+    if (userSnap.exists()) {
+      const profile = userSnap.data() as UserProfile;
+      setCurrentUser(profile);
+      return profile;
+    }
+    const fallbackProfile: UserProfile = {
+      uid: userCredential.user.uid,
+      email: userCredential.user.email || '',
+      displayName: userCredential.user.displayName || 'Pengguna SIBERSIH',
+      role: 'cleaner',
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setCurrentUser(fallbackProfile);
+    return fallbackProfile;
   };
 
   const register = async (
@@ -134,9 +149,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const switchDemoRole = (role: UserRole) => {
+    // FIX 2: Do not allow switching demo role when Firebase Live is active
+    if (isFirebaseConfigured && auth) {
+      console.warn('[SIBERSIH] switchDemoRole diabaikan karena Firebase Live aktif.');
+      return;
+    }
     localStorage.setItem('sibersih_demo_role', role);
     setCurrentUser(DEMO_PROFILES[role]);
   };
+
 
   return (
     <AuthContext.Provider

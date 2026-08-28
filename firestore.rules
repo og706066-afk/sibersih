@@ -32,11 +32,14 @@ service cloud.firestore {
     }
 
     // USERS COLLECTION
-    // Admin has full control. Users can read their own profile, or read all users if cleaner/admin.
+    // Admin has full control. Users can read their own profile, or read all users if cleaner/admin/teacher.
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isCleanerOrAdmin() || isTeacher());
-      allow create, update, delete: if isAdmin() || (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isActive']));
+      allow create: if isAdmin() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.role in ['cleaner', 'teacher'] && request.resource.data.isActive == true && request.resource.data.uid == userId);
+      allow update: if isAdmin() || (isAuthenticated() && request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isActive']));
+      allow delete: if isAdmin();
     }
+
 
     // CLASSES COLLECTION
     // Admin manages classes. Cleaner & Teachers can read classes.

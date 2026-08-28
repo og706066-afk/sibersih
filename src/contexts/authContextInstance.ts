@@ -7,7 +7,8 @@ export interface AuthContextType {
   firebaseUser: FirebaseUser | null;
   isLoading: boolean;
   isFirebaseActive: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<UserProfile>;
+
   register: (email: string, password: string, displayName: string, role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   switchDemoRole: (role: UserRole) => void;

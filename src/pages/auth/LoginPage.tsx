@@ -7,7 +7,7 @@ import type { UserRole } from '../../types';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
-  const { login, switchDemoRole } = useAuth();
+  const { login, switchDemoRole, isFirebaseActive } = useAuth();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -15,6 +15,7 @@ export const LoginPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleQuickLogin = (role: UserRole) => {
+    if (isFirebaseActive) return;
     switchDemoRole(role);
     if (role === 'cleaner') navigate('/cleaner');
     else if (role === 'teacher') navigate('/teacher');
@@ -26,9 +27,20 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
     setErrorMessage('');
     try {
-      await login(email, password);
-      // redirect based on role or to cleaner default
-      navigate('/cleaner');
+      // FIX 3: Dynamic post-login redirect based on resolved user role
+      const user = await login(email, password);
+      switch (user.role) {
+        case 'admin':
+          navigate('/admin');
+          break;
+        case 'teacher':
+          navigate('/teacher');
+          break;
+        case 'cleaner':
+        default:
+          navigate('/cleaner');
+          break;
+      }
     } catch (err: any) {
       setErrorMessage(err?.message || 'Gagal masuk. Periksa kembali email dan kata sandi Anda.');
     } finally {
@@ -50,83 +62,99 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        {/* Quick Role Selection for Ujikom Demo */}
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
-              Pilih Akses Cepat (Ujikom)
+        {/* FIX 2: Quick Role Selection only for Demo / Preview Mode */}
+        {isFirebaseActive ? (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2.5 text-xs text-emerald-800">
+            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+            <div>
+              <span className="font-bold">Mode Firebase Live Aktif</span>
+              <p className="text-[11px] text-emerald-700 mt-0.5">
+                Silakan masuk menggunakan akun email & kata sandi yang terdaftar di Firebase Authentication.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Pilih Akses Cepat (Ujikom Demo)
+              </span>
+              <Badge variant="info" size="sm">3 Peran</Badge>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('cleaner')}
+                className="w-full p-3 rounded-2xl border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/60 transition-all flex items-center justify-between text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
+                    <UserCheck className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900 group-hover:text-emerald-800">
+                      Bagian Kebersihan (Petugas)
+                    </h3>
+                    <p className="text-[11px] text-slate-500">Checklist inspeksi, pelanggaran & denda</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-emerald-600 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('teacher')}
+                className="w-full p-3 rounded-2xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100/60 transition-all flex items-center justify-between text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0">
+                    <GraduationCap className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900 group-hover:text-amber-800">
+                      Ustadz / Ustadzah (Wali Kelas)
+                    </h3>
+                    <p className="text-[11px] text-slate-500">Pemantauan nilai & pelanggaran (Read-Only)</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-amber-600 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('admin')}
+                className="w-full p-3 rounded-2xl border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100/60 transition-all flex items-center justify-between text-left cursor-pointer group"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+                    <Shield className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900 group-hover:text-indigo-800">
+                      Developer & Admin
+                    </h3>
+                    <p className="text-[11px] text-slate-500">Master data, hak akses & konfigurasi</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-700 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isFirebaseActive && (
+          <div className="relative flex items-center justify-center">
+            <div className="border-t border-slate-200 w-full" />
+            <span className="bg-white px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider absolute">
+              atau masuk manual
             </span>
-            <Badge variant="info" size="sm">3 Peran</Badge>
           </div>
-
-          <div className="grid grid-cols-1 gap-2">
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('cleaner')}
-              className="w-full p-3 rounded-2xl border border-emerald-200 bg-emerald-50/50 hover:bg-emerald-100/60 transition-all flex items-center justify-between text-left cursor-pointer group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-emerald-600 text-white flex items-center justify-center shrink-0">
-                  <UserCheck className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900 group-hover:text-emerald-800">
-                    Bagian Kebersihan (Petugas)
-                  </h3>
-                  <p className="text-[11px] text-slate-500">Checklist inspeksi, pelanggaran & denda</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-emerald-600 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('teacher')}
-              className="w-full p-3 rounded-2xl border border-amber-200 bg-amber-50/50 hover:bg-amber-100/60 transition-all flex items-center justify-between text-left cursor-pointer group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0">
-                  <GraduationCap className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900 group-hover:text-amber-800">
-                    Ustadz / Ustadzah (Wali Kelas)
-                  </h3>
-                  <p className="text-[11px] text-slate-500">Pemantauan nilai & pelanggaran (Read-Only)</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-amber-600 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleQuickLogin('admin')}
-              className="w-full p-3 rounded-2xl border border-indigo-200 bg-indigo-50/50 hover:bg-indigo-100/60 transition-all flex items-center justify-between text-left cursor-pointer group"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
-                  <Shield className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="text-xs font-bold text-slate-900 group-hover:text-indigo-800">
-                    Developer & Admin
-                  </h3>
-                  <p className="text-[11px] text-slate-500">Master data, hak akses & konfigurasi</p>
-                </div>
-              </div>
-              <ArrowRight className="w-4 h-4 text-slate-700 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all" />
-            </button>
-          </div>
-        </div>
-
-        <div className="relative flex items-center justify-center">
-          <div className="border-t border-slate-200 w-full" />
-          <span className="bg-white px-3 text-[11px] font-semibold text-slate-400 uppercase tracking-wider absolute">
-            atau masuk manual
-          </span>
-        </div>
+        )}
 
         {/* Email & Password Form */}
+
+
         <form onSubmit={handleStandardLogin} className="space-y-3">
           {errorMessage && (
             <div className="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs border border-rose-200">

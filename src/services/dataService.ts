@@ -1,6 +1,7 @@
 import {
   collection,
   getDocs,
+  getDoc,
   doc,
   setDoc,
   updateDoc,
@@ -9,6 +10,7 @@ import {
   writeBatch,
   runTransaction,
 } from 'firebase/firestore';
+
 import { db, isFirebaseConfigured } from '../config/firebase';
 
 import * as seed from './seedData';
@@ -366,25 +368,59 @@ export const DataService = {
     receivedById?: string,
     receiptNumber?: string
   ): Promise<void> {
+    if (isFirebaseConfigured && db) {
+      const penRef = doc(db, 'penalties', id);
+      const penSnap = await getDoc(penRef);
+      if (!penSnap.exists()) {
+        throw new Error('Data denda tidak ditemukan.');
+      }
+      const existing = penSnap.data() as Penalty;
+
+      // FIX 6: Prevent double payment at backend/service layer
+      if (existing.status === 'paid') {
+        throw new Error('Denda ini sudah dilunasi sebelumnya.');
+      }
+
+      const updates: Partial<Penalty> = {
+        status,
+        updatedAt: new Date().toISOString(),
+        ...(status === 'paid' && {
+          paidAt: existing.paidAt || new Date().toISOString(),
+          paidReceivedById: existing.paidReceivedById || receivedById,
+          receiptNumber: existing.receiptNumber || receiptNumber || `RCP-${Date.now()}`,
+        }),
+      };
+
+      await updateDoc(penRef, updates);
+      return;
+    }
+
+    // Offline / Demo Fallback Mode
+    const current = getLocalCollection<Penalty>(STORAGE_KEYS.penalties, seed.INITIAL_PENALTIES);
+    const existing = current.find((p) => p.id === id);
+    if (!existing) {
+      throw new Error('Data denda tidak ditemukan.');
+    }
+
+    // FIX 6: Prevent double payment at backend/service layer
+    if (existing.status === 'paid') {
+      throw new Error('Denda ini sudah dilunasi sebelumnya.');
+    }
+
     const updates: Partial<Penalty> = {
       status,
       updatedAt: new Date().toISOString(),
       ...(status === 'paid' && {
-        paidAt: new Date().toISOString(),
-        paidReceivedById: receivedById,
-        receiptNumber: receiptNumber || `RCP-${Date.now()}`,
+        paidAt: existing.paidAt || new Date().toISOString(),
+        paidReceivedById: existing.paidReceivedById || receivedById,
+        receiptNumber: existing.receiptNumber || receiptNumber || `RCP-${Date.now()}`,
       }),
     };
 
-    if (isFirebaseConfigured && db) {
-      await updateDoc(doc(db, 'penalties', id), updates);
-      return;
-    }
-
-    const current = getLocalCollection<Penalty>(STORAGE_KEYS.penalties, seed.INITIAL_PENALTIES);
     const updated = current.map((p) => (p.id === id ? { ...p, ...updates } : p));
     setLocalCollection(STORAGE_KEYS.penalties, updated);
   },
+
 
   // ============================================================
   // INVENTORIES & LOGS

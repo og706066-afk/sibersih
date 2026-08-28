@@ -13,10 +13,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
     
-    // FIX 5: Optimized single role retrieval
+    // FIX 3: Enforce isActive == true for all role authorizations
     function getUserRole() {
-      return isAuthenticated() ? getUserData().role : null;
+      return (isAuthenticated() && getUserData().isActive == true) 
+        ? getUserData().role 
+        : null;
     }
+
     
     function isAdmin() {
       return getUserRole() == 'admin';

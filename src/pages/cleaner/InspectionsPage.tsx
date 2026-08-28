@@ -64,11 +64,13 @@ export const InspectionsPage: React.FC = () => {
         DataService.getInspections(),
         DataService.getAreas(),
       ]);
+      const activeAreas = ar.filter((a) => a.isActive);
       setInspections(insp);
       setAreas(ar);
-      if (ar.length > 0 && !selectedAreaId) {
-        setSelectedAreaId(ar[0].id);
+      if (activeAreas.length > 0 && !selectedAreaId) {
+        setSelectedAreaId(activeAreas[0].id);
       }
+
     } catch (err) {
       console.error('Failed to load inspections data', err);
     } finally {
@@ -133,7 +135,7 @@ export const InspectionsPage: React.FC = () => {
       else if (totalScore < 75) overallGrade = 'dirty';
       else if (totalScore < 85) overallGrade = 'moderate';
 
-      await DataService.createInspection(
+      const newInspection = await DataService.createInspection(
         {
           areaId: selectedAreaId,
           areaName: area ? area.name : 'Area',
@@ -157,9 +159,11 @@ export const InspectionsPage: React.FC = () => {
       );
 
       // If violations found, create a violation record automatically
+      // FIX 4: Bind inspectionId so automatic violation links to its parent inspection
       if (hasViolations && area) {
         const failedItems = checklistItems.filter((i) => !i.passed);
-        await DataService.addViolation({
+        await DataService.createViolationWithPenalty({
+          inspectionId: newInspection.id,
           areaId: area.id,
           areaName: area.name,
           classId: area.classId,
@@ -175,6 +179,7 @@ export const InspectionsPage: React.FC = () => {
           penaltyCreated: false,
         });
       }
+
 
       setIsCreateModalOpen(false);
       // Reset form
@@ -297,7 +302,10 @@ export const InspectionsPage: React.FC = () => {
               label="Pilih Area / Lokasi"
               value={selectedAreaId}
               onChange={(e) => setSelectedAreaId(e.target.value)}
-              options={areas.map((a) => ({ value: a.id, label: `${a.name} (${a.building})` }))}
+              options={areas
+                .filter((a) => a.isActive)
+                .map((a) => ({ value: a.id, label: `${a.name} (${a.building})` }))}
+
               required
             />
             <Input

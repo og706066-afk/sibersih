@@ -13,12 +13,22 @@ export const TeacherViolationsPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [selectedViolation, setSelectedViolation] = useState<Violation | null>(null);
 
+  const [hasAssignment, setHasAssignment] = useState(true);
+
   useEffect(() => {
     const loadViolations = async () => {
       try {
         // FIX 1: Query violations and penalties strictly for this teacher's assigned classroom
         const assign = await DataService.getTeacherAssignments(currentUser?.uid);
-        const assignedClassId = assign.length > 0 ? assign[0].classId : 'class-1';
+        if (assign.length === 0) {
+          setHasAssignment(false);
+          setIsLoading(false);
+          return;
+        }
+
+        setHasAssignment(true);
+        // TODO: Multi-class selector if teacher has multiple assignments
+        const assignedClassId = assign[0].classId;
 
         const [viols, pens] = await Promise.all([
           DataService.getViolations(assignedClassId),
@@ -35,10 +45,28 @@ export const TeacherViolationsPage: React.FC = () => {
     loadViolations();
   }, [currentUser]);
 
-
   if (isLoading) {
     return <LoadingState message="Memuat catatan pelanggaran kelas..." />;
   }
+
+  // FIX 1: If no assignment, render informative EmptyState without attempting to read class-1
+  if (!hasAssignment) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Catatan Pelanggaran & Denda</h2>
+          <p className="text-xs text-slate-500">
+            Monitoring ketidaksesuaian piket dan sanksi kas kebersihan santri
+          </p>
+        </div>
+        <EmptyState
+          title="Belum Ada Penugasan Kelas"
+          description="Anda belum ditugaskan sebagai wali kelas. Silakan hubungi bagian administrasi pesantren."
+        />
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-4">

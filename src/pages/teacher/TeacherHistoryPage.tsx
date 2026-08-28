@@ -13,12 +13,22 @@ export const TeacherHistoryPage: React.FC = () => {
   const [selectedItems, setSelectedItems] = useState<InspectionItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
 
+  const [hasAssignment, setHasAssignment] = useState(true);
+
   useEffect(() => {
     const loadHistory = async () => {
       try {
         // FIX 1: Query inspections strictly for this teacher's assigned classroom
         const assign = await DataService.getTeacherAssignments(currentUser?.uid);
-        const assignedClassId = assign.length > 0 ? assign[0].classId : 'class-1';
+        if (assign.length === 0) {
+          setHasAssignment(false);
+          setIsLoading(false);
+          return;
+        }
+
+        setHasAssignment(true);
+        // TODO: Multi-class selector if teacher has multiple assignments
+        const assignedClassId = assign[0].classId;
         const classInspections = await DataService.getInspections(assignedClassId);
         setInspections(classInspections);
       } catch (err) {
@@ -29,7 +39,6 @@ export const TeacherHistoryPage: React.FC = () => {
     };
     loadHistory();
   }, [currentUser]);
-
 
   const handleOpenDetail = async (insp: Inspection) => {
     setSelectedInspection(insp);
@@ -47,6 +56,23 @@ export const TeacherHistoryPage: React.FC = () => {
   if (isLoading) {
     return <LoadingState message="Memuat riwayat pemeriksaan kelas..." />;
   }
+
+  // FIX 1: If no assignment, render informative EmptyState without attempting to read class-1
+  if (!hasAssignment) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Riwayat Nilai Kebersihan</h2>
+          <p className="text-xs text-slate-500">Histori evaluasi checklist ruang kelas santri</p>
+        </div>
+        <EmptyState
+          title="Belum Ada Penugasan Kelas"
+          description="Anda belum ditugaskan sebagai wali kelas. Silakan hubungi bagian administrasi pesantren."
+        />
+      </div>
+    );
+  }
+
 
   return (
     <div className="space-y-4">

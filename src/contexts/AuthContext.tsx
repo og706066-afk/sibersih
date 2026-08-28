@@ -41,7 +41,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const userDocRef = doc(db, 'users', user.uid);
           const userSnap = await getDoc(userDocRef);
           if (userSnap.exists()) {
-            setCurrentUser(userSnap.data() as UserProfile);
+            const profile = userSnap.data() as UserProfile;
+            // FIX 2: Deny inactive users during session restoration
+            if (profile.isActive !== true) {
+              if (auth) await firebaseSignOut(auth);
+              setCurrentUser(null);
+              setFirebaseUser(null);
+              setIsLoading(false);
+              return;
+            }
+
+            setCurrentUser(profile);
           } else {
             // Profile fallback
             const defaultProfile: UserProfile = {
@@ -78,6 +88,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
       if (foundRole) {
         const demoUser = DEMO_PROFILES[foundRole];
+        // FIX 2: Deny inactive users in demo mode
+        if (demoUser.isActive !== true) {
+          throw new Error('Akun Anda dinonaktifkan. Hubungi Administrator.');
+        }
         setCurrentUser(demoUser);
         localStorage.setItem('sibersih_demo_role', foundRole);
         return demoUser;
@@ -90,9 +104,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userSnap = await getDoc(userDocRef);
     if (userSnap.exists()) {
       const profile = userSnap.data() as UserProfile;
+      // FIX 2: Deny inactive user login and sign out immediately
+      if (profile.isActive !== true) {
+        await firebaseSignOut(auth);
+        setCurrentUser(null);
+        setFirebaseUser(null);
+        throw new Error('Akun Anda dinonaktifkan. Hubungi Administrator.');
+      }
       setCurrentUser(profile);
       return profile;
     }
+
     const fallbackProfile: UserProfile = {
       uid: userCredential.user.uid,
       email: userCredential.user.email || '',

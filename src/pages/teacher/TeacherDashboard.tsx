@@ -9,7 +9,7 @@ import {
   ArrowRight,
   ShieldCheck,
 } from 'lucide-react';
-import { Card, Button, Badge, LoadingState } from '../../components/common';
+import { Card, Button, Badge, LoadingState, EmptyState } from '../../components/common';
 
 import { DataService } from '../../services/dataService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -41,8 +41,14 @@ export const TeacherDashboard: React.FC = () => {
         setClasses(cls);
         setAssignments(assign);
 
-        // FIX 1: Retrieve assigned class ID to query strictly within Teacher Class Isolation
-        const assignedClassId = assign.length > 0 ? assign[0].classId : 'class-1';
+        // FIX 1: If teacher has no class assignment, do not query any class data to prevent PERMISSION_DENIED
+        if (assign.length === 0) {
+          setIsLoading(false);
+          return;
+        }
+
+        // TODO: Multi-class selector if teacher has multiple assignments
+        const assignedClassId = assign[0].classId;
 
         const [insp, viol, pen] = await Promise.all([
           DataService.getInspections(assignedClassId),
@@ -61,14 +67,38 @@ export const TeacherDashboard: React.FC = () => {
     loadTeacherData();
   }, [currentUser]);
 
-
   if (isLoading) {
     return <LoadingState message="Memuat pantauan kelas santri..." />;
   }
 
-  // Determine assigned class: either from assignments or first class for demo
-  const assignedClassId = assignments.length > 0 ? assignments[0].classId : 'class-1';
-  const assignedClass = classes.find((c) => c.id === assignedClassId) || classes[0];
+  // FIX 1: If no assignment, render informative EmptyState without attempting to read class-1
+  if (assignments.length === 0) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Pantauan Kelas Santri</h2>
+          <p className="text-xs text-slate-500">Monitoring kondisi kebersihan ruang kelas</p>
+        </div>
+        <EmptyState
+          icon={<GraduationCap className="w-8 h-8 text-slate-400" />}
+          title="Belum Ada Penugasan Kelas"
+          description="Anda belum ditugaskan sebagai wali kelas. Silakan hubungi bagian administrasi pesantren."
+        />
+      </div>
+    );
+  }
+
+  // TODO: Multi-class selector if teacher has multiple assignments
+  const assignedClassId = assignments[0].classId;
+  const assignedClass = classes.find((c) => c.id === assignedClassId) || {
+    id: assignedClassId,
+    name: assignments[0].className || 'Kelas Binaan',
+    grade: '',
+    isActive: true,
+    createdAt: '',
+    updatedAt: '',
+  };
+
 
   // Filter inspections for this class or its area
   const classInspections = inspections.filter(

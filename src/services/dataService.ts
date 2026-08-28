@@ -549,73 +549,100 @@ export const DataService = {
   },
 
   // ============================================================
-  // SEED TO FIRESTORE UTILITY
+  // PRODUCTION MASTER DATA INITIALIZATION (IDEMPOTENT & SAFE)
   // ============================================================
-  async seedInitialDataToFirestore(): Promise<{ success: boolean; message: string }> {
+  async seedInitialDataToFirestore(): Promise<{
+    success: boolean;
+    message: string;
+    createdCount: number;
+    skippedCount: number;
+    errorCount: number;
+  }> {
     if (!isFirebaseConfigured || !db) {
       return {
         success: false,
         message: 'Firebase belum terkonfigurasi. Silakan isi credential di file .env terlebih dahulu.',
+        createdCount: 0,
+        skippedCount: 0,
+        errorCount: 0,
       };
     }
 
+    let createdCount = 0;
+    let skippedCount = 0;
+    let errorCount = 0;
+
+    // Helper: Hanya tulis jika dokumen belum ada di Firestore
+    const seedIfMissing = async (collectionName: string, docId: string, data: any) => {
+      try {
+        const docRef = doc(db!, collectionName, docId);
+        const snap = await getDoc(docRef);
+        if (snap.exists()) {
+          skippedCount++;
+        } else {
+          await setDoc(docRef, data);
+          createdCount++;
+        }
+      } catch (err) {
+        console.error(`Gagal inisialisasi dokumen ${collectionName}/${docId}:`, err);
+        errorCount++;
+      }
+    };
+
     try {
-      // 1. Classes
-      for (const item of seed.INITIAL_CLASSES) {
-        await setDoc(doc(db, 'classes', item.id), item);
-      }
-      // 2. Areas
-      for (const item of seed.INITIAL_AREAS) {
-        await setDoc(doc(db, 'areas', item.id), item);
-      }
-      // 3. Schedules
-      for (const item of seed.INITIAL_SCHEDULES) {
-        await setDoc(doc(db, 'schedules', item.id), item);
-      }
-      // 4. Violation types
-      for (const item of seed.INITIAL_VIOLATION_TYPES) {
-        await setDoc(doc(db, 'violation_types', item.id), item);
-      }
-      // 5. Penalty rules
-      for (const item of seed.INITIAL_PENALTY_RULES) {
-        await setDoc(doc(db, 'penalty_rules', item.id), item);
-      }
-      // 6. Inspections & items
-      for (const item of seed.INITIAL_INSPECTIONS) {
-        await setDoc(doc(db, 'inspections', item.id), item);
-      }
-      for (const item of seed.INITIAL_INSPECTION_ITEMS) {
-        await setDoc(doc(db, 'inspection_items', item.id), item);
-      }
-      // 7. Violations & Penalties
-      for (const item of seed.INITIAL_VIOLATIONS) {
-        await setDoc(doc(db, 'violations', item.id), item);
-      }
-      for (const item of seed.INITIAL_PENALTIES) {
-        await setDoc(doc(db, 'penalties', item.id), item);
-      }
-      // 8. Inventories
-      for (const item of seed.INITIAL_INVENTORIES) {
-        await setDoc(doc(db, 'inventories', item.id), item);
-      }
-      for (const item of seed.INITIAL_INVENTORY_LOGS) {
-        await setDoc(doc(db, 'inventory_logs', item.id), item);
-      }
-      // 9. Teacher Assignments
-      for (const item of seed.INITIAL_TEACHER_ASSIGNMENTS) {
-        await setDoc(doc(db, 'teacher_class_assignments', item.id), item);
-        await setDoc(doc(db, 'teacher_class_assignments', `${item.teacherId}_${item.classId}`), item);
+      // 1. Classes: Gunakan PRODUCTION_MASTER_CLASSES (Tanpa mock demo-teacher-uid)
+      for (const item of seed.PRODUCTION_MASTER_CLASSES) {
+        await seedIfMissing('classes', item.id, item);
       }
 
+      // 2. Areas: Master area / lokasi pesantren
+      for (const item of seed.INITIAL_AREAS) {
+        await seedIfMissing('areas', item.id, item);
+      }
+
+      // 3. Violation Types: Master kategori pelanggaran kebersihan
+      for (const item of seed.INITIAL_VIOLATION_TYPES) {
+        await seedIfMissing('violation_types', item.id, item);
+      }
+
+      // 4. Penalty Rules: Master tarif & sanksi denda
+      for (const item of seed.INITIAL_PENALTY_RULES) {
+        await seedIfMissing('penalty_rules', item.id, item);
+      }
+
+      // 5. Inventories: Master barang kebersihan (tidak akan menimpa stok existing)
+      for (const item of seed.INITIAL_INVENTORIES) {
+        await seedIfMissing('inventories', item.id, item);
+      }
+
+      // CATATAN KEAMANAN PRODUCTION:
+      // Data operasional fiktif DILARANG di-seed ke database production:
+      // - inspections (insp-101, insp-102) -> TIDAK DI-SEED
+      // - inspection_items (ii-1 s/d ii-4) -> TIDAK DI-SEED
+      // - violations (viol-1) -> TIDAK DI-SEED
+      // - penalties (pen-1) -> TIDAK DI-SEED
+      // - inventory_logs (log-1, log-2) -> TIDAK DI-SEED
+      // - teacher_class_assignments dengan mock demo UID -> TIDAK DI-SEED
+      // - schedules dengan mock demo-cleaner-uid -> TIDAK DI-SEED
+
+      const summaryMessage = `Inisialisasi selesai: ${createdCount} data master dibuat, ${skippedCount} data dilewati karena sudah ada.${
+        errorCount > 0 ? ` (${errorCount} data mengalami kendala).` : ''
+      }`;
 
       return {
-        success: true,
-        message: 'Berhasil mengunggah data inisial lengkap ke Cloud Firestore!',
+        success: errorCount === 0,
+        message: summaryMessage,
+        createdCount,
+        skippedCount,
+        errorCount,
       };
     } catch (error: any) {
       return {
         success: false,
-        message: `Gagal sinkronisasi data ke Firestore: ${error?.message || error}`,
+        message: `Gagal inisialisasi master data: ${error?.message || error}`,
+        createdCount,
+        skippedCount,
+        errorCount: errorCount + 1,
       };
     }
   },

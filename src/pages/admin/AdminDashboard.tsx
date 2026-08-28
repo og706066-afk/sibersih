@@ -12,7 +12,7 @@ import {
   ArrowRight,
   Settings,
 } from 'lucide-react';
-import { Card, Button, Badge, LoadingState } from '../../components/common';
+import { Card, Button, Badge, LoadingState, Modal } from '../../components/common';
 
 import { DataService } from '../../services/dataService';
 import { useAuth } from '../../contexts/AuthContext';
@@ -30,6 +30,7 @@ export const AdminDashboard: React.FC = () => {
   const { isFirebaseActive } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [seedMessage, setSeedMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(
     null
   );
@@ -68,7 +69,12 @@ export const AdminDashboard: React.FC = () => {
     loadAdminData();
   }, []);
 
-  const handleSeedFirestore = async () => {
+  const handleOpenSeedConfirm = () => {
+    setShowConfirmModal(true);
+  };
+
+  const executeSeedMasterData = async () => {
+    setShowConfirmModal(false);
     setIsSeeding(true);
     setSeedMessage(null);
     try {
@@ -80,7 +86,7 @@ export const AdminDashboard: React.FC = () => {
       }
       await loadAdminData();
     } catch (err: any) {
-      setSeedMessage({ type: 'error', text: err?.message || 'Gagal sinkronisasi data.' });
+      setSeedMessage({ type: 'error', text: err?.message || 'Gagal inisialisasi master data.' });
     } finally {
       setIsSeeding(false);
     }
@@ -141,9 +147,9 @@ export const AdminDashboard: React.FC = () => {
             className="text-xs font-semibold border-indigo-200 text-indigo-700 hover:bg-indigo-50 shrink-0 ml-2"
             leftIcon={<RefreshCw className={`w-3.5 h-3.5 ${isSeeding ? 'animate-spin' : ''}`} />}
             isLoading={isSeeding}
-            onClick={handleSeedFirestore}
+            onClick={handleOpenSeedConfirm}
           >
-            Sinkronkan Data
+            Inisialisasi Master Data
           </Button>
         </div>
 
@@ -314,6 +320,48 @@ export const AdminDashboard: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* Confirmation Modal for Production Master Data Seed */}
+      <Modal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        title="Inisialisasi Master Data Production"
+        size="sm"
+        footer={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowConfirmModal(false)}
+            >
+              Batal
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={executeSeedMasterData}
+            >
+              Lanjutkan
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3 text-xs text-slate-600">
+          <p className="text-sm font-medium text-slate-800">
+            Fitur ini hanya mengisi master data yang belum tersedia. Data operasional dan data yang sudah ada tidak akan dibuat ulang atau dihapus. Lanjutkan?
+          </p>
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5 text-[11px] text-slate-600">
+            <p className="font-semibold text-slate-700">Master data yang akan diinisialisasi jika belum ada:</p>
+            <ul className="list-disc list-inside space-y-0.5 text-slate-500">
+              <li>Master Kelas (X IPA 1, X IPA 2, XI IPA 1 tanpa mock UID)</li>
+              <li>Master Area & Ruang Lingkungan Pesantren</li>
+              <li>Master Jenis Pelanggaran Kebersihan</li>
+              <li>Master Aturan & Tarif Sanksi Denda</li>
+              <li>Katalog Barang & Sarpras Inventaris (tanpa reset stok)</li>
+            </ul>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 };

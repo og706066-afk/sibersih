@@ -13,6 +13,42 @@ import type {
   TeacherClassAssignment,
 } from '../types';
 
+// ============================================================
+// PRODUCTION MASTER TEMPLATES (STRICTLY CLEAN, NO MOCK/DEMO UIDs)
+// ============================================================
+export const PRODUCTION_MASTER_CLASSES: ClassRoom[] = [
+  {
+    id: 'class-1',
+    name: 'X IPA 1',
+    grade: '10',
+    building: 'Gedung Umar bin Khattab',
+    isActive: true,
+    createdAt: '2026-08-01T08:00:00Z',
+    updatedAt: '2026-08-01T08:00:00Z',
+  },
+  {
+    id: 'class-2',
+    name: 'X IPA 2',
+    grade: '10',
+    building: 'Gedung Umar bin Khattab',
+    isActive: true,
+    createdAt: '2026-08-01T08:00:00Z',
+    updatedAt: '2026-08-01T08:00:00Z',
+  },
+  {
+    id: 'class-3',
+    name: 'XI IPA 1',
+    grade: '11',
+    building: 'Gedung Ali bin Abi Thalib',
+    isActive: true,
+    createdAt: '2026-08-01T08:00:00Z',
+    updatedAt: '2026-08-01T08:00:00Z',
+  },
+];
+
+// ============================================================
+// DEMO / OFFLINE INITIAL DATA (FOR LOCAL PREVIEW / TESTING ONLY)
+// ============================================================
 export const INITIAL_CLASSES: ClassRoom[] = [
   {
     id: 'class-1',

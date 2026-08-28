@@ -1,4 +1,5 @@
-import React, { createContext, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+
 
 import {
   signInWithEmailAndPassword,
@@ -14,18 +15,9 @@ import type { UserProfile, UserRole } from '../types';
 import { DEMO_PROFILES } from '../constants/demoProfiles';
 
 
-export interface AuthContextType {
-  currentUser: UserProfile | null;
-  firebaseUser: FirebaseUser | null;
-  isLoading: boolean;
-  isFirebaseActive: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName: string, role: UserRole) => Promise<void>;
-  logout: () => Promise<void>;
-  switchDemoRole: (role: UserRole) => void;
-}
+import { AuthContext } from './authContextInstance';
 
-export const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
 
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -165,4 +157,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
 export { useAuth } from './useAuth';
+export { AuthContext, type AuthContextType } from './authContextInstance';
+
 

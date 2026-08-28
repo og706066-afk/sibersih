@@ -34,15 +34,21 @@ export const TeacherDashboard: React.FC = () => {
   useEffect(() => {
     const loadTeacherData = async () => {
       try {
-        const [cls, assign, insp, viol, pen] = await Promise.all([
+        const [cls, assign] = await Promise.all([
           DataService.getClasses(),
           DataService.getTeacherAssignments(currentUser?.uid),
-          DataService.getInspections(),
-          DataService.getViolations(),
-          DataService.getPenalties(),
         ]);
         setClasses(cls);
         setAssignments(assign);
+
+        // FIX 1: Retrieve assigned class ID to query strictly within Teacher Class Isolation
+        const assignedClassId = assign.length > 0 ? assign[0].classId : 'class-1';
+
+        const [insp, viol, pen] = await Promise.all([
+          DataService.getInspections(assignedClassId),
+          DataService.getViolations(assignedClassId),
+          DataService.getPenalties(assignedClassId),
+        ]);
         setInspections(insp);
         setViolations(viol);
         setPenalties(pen);
@@ -54,6 +60,7 @@ export const TeacherDashboard: React.FC = () => {
     };
     loadTeacherData();
   }, [currentUser]);
+
 
   if (isLoading) {
     return <LoadingState message="Memuat pantauan kelas santri..." />;

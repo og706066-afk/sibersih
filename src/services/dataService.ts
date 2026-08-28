@@ -161,12 +161,16 @@ export const DataService = {
   // ============================================================
   // INSPECTIONS & INSPECTION ITEMS
   // ============================================================
-  async getInspections(): Promise<Inspection[]> {
+  async getInspections(classId?: string): Promise<Inspection[]> {
     if (isFirebaseConfigured && db) {
-      const snap = await getDocs(collection(db, 'inspections'));
+      const q = classId
+        ? query(collection(db, 'inspections'), where('classId', '==', classId))
+        : collection(db, 'inspections');
+      const snap = await getDocs(q);
       return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Inspection));
     }
-    return getLocalCollection<Inspection>(STORAGE_KEYS.inspections, seed.INITIAL_INSPECTIONS);
+    const current = getLocalCollection<Inspection>(STORAGE_KEYS.inspections, seed.INITIAL_INSPECTIONS);
+    return classId ? current.filter((i) => i.classId === classId) : current;
   },
 
   async getInspectionItems(inspectionId: string): Promise<InspectionItem[]> {
@@ -237,12 +241,16 @@ export const DataService = {
   // ============================================================
   // VIOLATIONS
   // ============================================================
-  async getViolations(): Promise<Violation[]> {
+  async getViolations(classId?: string): Promise<Violation[]> {
     if (isFirebaseConfigured && db) {
-      const snap = await getDocs(collection(db, 'violations'));
+      const q = classId
+        ? query(collection(db, 'violations'), where('classId', '==', classId))
+        : collection(db, 'violations');
+      const snap = await getDocs(q);
       return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Violation));
     }
-    return getLocalCollection<Violation>(STORAGE_KEYS.violations, seed.INITIAL_VIOLATIONS);
+    const current = getLocalCollection<Violation>(STORAGE_KEYS.violations, seed.INITIAL_VIOLATIONS);
+    return classId ? current.filter((v) => v.classId === classId) : current;
   },
 
   async addViolation(violationData: Omit<Violation, 'id' | 'createdAt' | 'updatedAt'>): Promise<Violation> {
@@ -266,13 +274,17 @@ export const DataService = {
   // ============================================================
   // PENALTIES
   // ============================================================
-  async getPenalties(): Promise<Penalty[]> {
+  async getPenalties(classId?: string): Promise<Penalty[]> {
     if (isFirebaseConfigured && db) {
-      const snap = await getDocs(collection(db, 'penalties'));
+      const q = classId
+        ? query(collection(db, 'penalties'), where('classId', '==', classId))
+        : collection(db, 'penalties');
+      const snap = await getDocs(q);
       return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Penalty));
     }
     return getLocalCollection<Penalty>(STORAGE_KEYS.penalties, seed.INITIAL_PENALTIES);
   },
+
 
   async addPenalty(penaltyData: Omit<Penalty, 'id' | 'createdAt' | 'updatedAt'>): Promise<Penalty> {
     const item: Penalty = {
@@ -456,7 +468,9 @@ export const DataService = {
       // 9. Teacher Assignments
       for (const item of seed.INITIAL_TEACHER_ASSIGNMENTS) {
         await setDoc(doc(db, 'teacher_class_assignments', item.id), item);
+        await setDoc(doc(db, 'teacher_class_assignments', `${item.teacherId}_${item.classId}`), item);
       }
+
 
       return {
         success: true,

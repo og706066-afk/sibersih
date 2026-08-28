@@ -2,7 +2,9 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Helper functions
+    // ============================================================
+    // HELPER FUNCTIONS
+    // ============================================================
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -11,28 +13,41 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
     
+    // FIX 5: Optimized single role retrieval
     function getUserRole() {
       return isAuthenticated() ? getUserData().role : null;
     }
     
     function isAdmin() {
-      return isAuthenticated() && getUserRole() == 'admin';
+      return getUserRole() == 'admin';
     }
     
     function isCleaner() {
-      return isAuthenticated() && getUserRole() == 'cleaner';
+      return getUserRole() == 'cleaner';
     }
     
     function isTeacher() {
-      return isAuthenticated() && getUserRole() == 'teacher';
+      return getUserRole() == 'teacher';
     }
 
+    // FIX 5: Optimized to evaluate getUserRole() once
     function isCleanerOrAdmin() {
-      return isAdmin() || isCleaner();
+      let role = getUserRole();
+      return role == 'admin' || role == 'cleaner';
     }
 
+    // FIX 1: Helper to verify if request.auth.uid is assigned teacher of classId
+    function isClassTeacher(classId) {
+      return isTeacher() && classId != null && (
+        exists(/databases/$(database)/documents/teacher_class_assignments/$(request.auth.uid + '_' + classId)) ||
+        (exists(/databases/$(database)/documents/classes/$(classId)) &&
+         get(/databases/$(database)/documents/classes/$(classId)).data.homeroomTeacherId == request.auth.uid)
+      );
+    }
+
+    // ============================================================
     // USERS COLLECTION
-    // Admin has full control. Users can read their own profile, or read all users if cleaner/admin/teacher.
+    // ============================================================
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isCleanerOrAdmin() || isTeacher());
       allow create: if isAdmin() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.role in ['cleaner', 'teacher'] && request.resource.data.isActive == true && request.resource.data.uid == userId);
@@ -40,40 +55,51 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-
+    // ============================================================
     // CLASSES COLLECTION
-    // Admin manages classes. Cleaner & Teachers can read classes.
+    // ============================================================
     match /classes/{classId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
 
+    // ============================================================
     // TEACHER CLASS ASSIGNMENTS
-    // Admin manages. Teachers can read their assignments. Cleaner can read.
+    // ============================================================
     match /teacher_class_assignments/{assignmentId} {
-      allow read: if isAuthenticated();
+      allow read: if isCleanerOrAdmin() || (isTeacher() && resource.data.teacherId == request.auth.uid);
       allow write: if isAdmin();
     }
 
+    // ============================================================
     // AREAS COLLECTION
-    // Admin and Cleaner can manage areas. Teachers can view areas.
+    // FIX 3: Cleaner/Admin can create/update, delete ONLY Admin
+    // ============================================================
     match /areas/{areaId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isCleanerOrAdmin();
+      allow create, update: if isCleanerOrAdmin();
+      allow delete: if isAdmin();
     }
 
+    // ============================================================
     // SCHEDULES COLLECTION
-    // Admin and Cleaner manage schedules. Teachers can read schedules.
+    // FIX 3: Cleaner/Admin can create/update, delete ONLY Admin
+    // ============================================================
     match /schedules/{scheduleId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isCleanerOrAdmin();
+      allow create, update: if isCleanerOrAdmin();
+      allow delete: if isAdmin();
     }
 
-    // INSPECTIONS & INSPECTION ITEMS COLLECTION
-    // Cleaner & Admin can create & update inspections. Teachers are READ-ONLY.
+    // ============================================================
+    // INSPECTIONS & INSPECTION ITEMS
+    // FIX 1: Teacher can ONLY read inspections for their assigned class
+    // FIX 4: Creator UID binding on create & update (inspectorId == request.auth.uid)
+    // ============================================================
     match /inspections/{inspectionId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isCleanerOrAdmin();
+      allow read: if isCleanerOrAdmin() || (resource.data.classId != null && isClassTeacher(resource.data.classId));
+      allow create: if isAdmin() || (isCleaner() && request.resource.data.inspectorId == request.auth.uid);
+      allow update: if isAdmin() || (isCleaner() && resource.data.inspectorId == request.auth.uid);
       allow delete: if isAdmin();
     }
 
@@ -83,48 +109,68 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // ============================================================
     // VIOLATION TYPES & PENALTY RULES
+    // FIX 2: Admin only for write. Cleaner/Teacher READ ONLY.
+    // ============================================================
     match /violation_types/{typeId} {
       allow read: if isAuthenticated();
-      allow write: if isCleanerOrAdmin();
+      allow write: if isAdmin();
     }
 
     match /penalty_rules/{ruleId} {
       allow read: if isAuthenticated();
-      allow write: if isCleanerOrAdmin();
+      allow write: if isAdmin();
     }
 
-    // VIOLATIONS & PENALTIES
-    // Cleaner and Admin manage violations and penalties. Teachers are strictly READ-ONLY.
+    // ============================================================
+    // VIOLATIONS
+    // FIX 1: Teacher can ONLY read violations for their assigned class
+    // FIX 4: Creator UID binding on create & update (reportedById == request.auth.uid)
+    // ============================================================
     match /violations/{violationId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isCleanerOrAdmin();
+      allow read: if isCleanerOrAdmin() || (resource.data.classId != null && isClassTeacher(resource.data.classId));
+      allow create: if isAdmin() || (isCleaner() && request.resource.data.reportedById == request.auth.uid);
+      allow update: if isAdmin() || (isCleaner() && resource.data.reportedById == request.auth.uid);
       allow delete: if isAdmin();
     }
 
+    // ============================================================
+    // PENALTIES
+    // FIX 1: Teacher can ONLY read penalties for their assigned class
+    // FIX 4: Creator UID binding on create (issuedById == request.auth.uid)
+    // ============================================================
     match /penalties/{penaltyId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isCleanerOrAdmin();
+      allow read: if isCleanerOrAdmin() || (resource.data.classId != null && isClassTeacher(resource.data.classId));
+      allow create: if isAdmin() || (isCleaner() && request.resource.data.issuedById == request.auth.uid);
+      allow update: if isCleanerOrAdmin();
       allow delete: if isAdmin();
     }
 
+    // ============================================================
     // PHOTOS COLLECTION
+    // FIX 4: Creator UID binding on create & delete (uploadedById == request.auth.uid)
+    // ============================================================
     match /photos/{photoId} {
       allow read: if isAuthenticated();
-      allow create: if isCleanerOrAdmin();
-      allow update, delete: if isCleanerOrAdmin();
+      allow create: if isAdmin() || (isCleaner() && request.resource.data.uploadedById == request.auth.uid);
+      allow update, delete: if isAdmin() || (isCleaner() && resource.data.uploadedById == request.auth.uid);
     }
 
+    // ============================================================
     // INVENTORIES & INVENTORY LOGS
-    // Cleaner & Admin manage inventories and logs. Teachers cannot modify.
+    // FIX 2: Cleaner CANNOT delete inventory
+    // FIX 4: Creator UID binding on create (performedById == request.auth.uid)
+    // ============================================================
     match /inventories/{inventoryId} {
       allow read: if isAuthenticated();
-      allow write: if isCleanerOrAdmin();
+      allow create, update: if isCleanerOrAdmin();
+      allow delete: if isAdmin();
     }
 
     match /inventory_logs/{logId} {
       allow read: if isAuthenticated();
-      allow create: if isCleanerOrAdmin();
+      allow create: if isAdmin() || (isCleaner() && request.resource.data.performedById == request.auth.uid);
       allow update, delete: if isAdmin();
     }
   }

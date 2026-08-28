@@ -2,10 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, CheckCircle2 } from 'lucide-react';
 
 import { Card, Badge, Modal, LoadingState, EmptyState } from '../../components/common';
+import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../services/dataService';
 import type { Violation, Penalty } from '../../types';
 
 export const TeacherViolationsPage: React.FC = () => {
+  const { currentUser } = useAuth();
   const [violations, setViolations] = useState<Violation[]>([]);
   const [penalties, setPenalties] = useState<Penalty[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -14,9 +16,13 @@ export const TeacherViolationsPage: React.FC = () => {
   useEffect(() => {
     const loadViolations = async () => {
       try {
+        // FIX 1: Query violations and penalties strictly for this teacher's assigned classroom
+        const assign = await DataService.getTeacherAssignments(currentUser?.uid);
+        const assignedClassId = assign.length > 0 ? assign[0].classId : 'class-1';
+
         const [viols, pens] = await Promise.all([
-          DataService.getViolations(),
-          DataService.getPenalties(),
+          DataService.getViolations(assignedClassId),
+          DataService.getPenalties(assignedClassId),
         ]);
         setViolations(viols);
         setPenalties(pens);
@@ -27,7 +33,8 @@ export const TeacherViolationsPage: React.FC = () => {
       }
     };
     loadViolations();
-  }, []);
+  }, [currentUser]);
+
 
   if (isLoading) {
     return <LoadingState message="Memuat catatan pelanggaran kelas..." />;

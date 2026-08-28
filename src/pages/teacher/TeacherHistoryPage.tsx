@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { History, Calendar, MapPin } from 'lucide-react';
 import { Card, Badge, Modal, LoadingState, EmptyState } from '../../components/common';
+import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../services/dataService';
 import type { Inspection, InspectionItem } from '../../types';
 
 export const TeacherHistoryPage: React.FC = () => {
-
+  const { currentUser } = useAuth();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedInspection, setSelectedInspection] = useState<Inspection | null>(null);
@@ -15,9 +16,11 @@ export const TeacherHistoryPage: React.FC = () => {
   useEffect(() => {
     const loadHistory = async () => {
       try {
-        const allInspections = await DataService.getInspections();
-        // Show inspections for X IPA 1 or relevant classes
-        setInspections(allInspections);
+        // FIX 1: Query inspections strictly for this teacher's assigned classroom
+        const assign = await DataService.getTeacherAssignments(currentUser?.uid);
+        const assignedClassId = assign.length > 0 ? assign[0].classId : 'class-1';
+        const classInspections = await DataService.getInspections(assignedClassId);
+        setInspections(classInspections);
       } catch (err) {
         console.error('Failed to load inspection history', err);
       } finally {
@@ -25,7 +28,8 @@ export const TeacherHistoryPage: React.FC = () => {
       }
     };
     loadHistory();
-  }, []);
+  }, [currentUser]);
+
 
   const handleOpenDetail = async (insp: Inspection) => {
     setSelectedInspection(insp);

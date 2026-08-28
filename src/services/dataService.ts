@@ -1,3 +1,5 @@
+import { initializeApp, deleteApp } from 'firebase/app';
+import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import {
   collection,
   getDocs,
@@ -11,8 +13,8 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 
-import { db, isFirebaseConfigured } from '../config/firebase';
-
+import { db, isFirebaseConfigured, firebaseConfig } from '../config/firebase';
+import { DEMO_PROFILES } from '../constants/demoProfiles';
 import * as seed from './seedData';
 import type {
   ClassRoom,
@@ -27,6 +29,8 @@ import type {
   InventoryItem,
   InventoryLog,
   TeacherClassAssignment,
+  UserProfile,
+  UserRole,
 } from '../types';
 
 
@@ -645,5 +649,144 @@ export const DataService = {
         errorCount: errorCount + 1,
       };
     }
+  },
+
+  // ============================================================
+  // USER MANAGEMENT
+  // ============================================================
+  async getUsers(): Promise<UserProfile[]> {
+    if (isFirebaseConfigured && db) {
+      const snap = await getDocs(collection(db, 'users'));
+      const list = snap.docs.map((d) => ({ ...d.data() } as UserProfile));
+      return list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    }
+
+    return getLocalCollection<UserProfile>(STORAGE_KEYS.users, [
+      DEMO_PROFILES.admin,
+      DEMO_PROFILES.cleaner,
+      DEMO_PROFILES.teacher,
+      {
+        uid: 'user-cleaner-2',
+        email: 'joko.kebersihan@sibersih.id',
+        displayName: 'Pak Joko (Petugas Shift Siang)',
+        role: 'cleaner',
+        phoneNumber: '081399887766',
+        isActive: true,
+        createdAt: '2026-08-10T08:00:00Z',
+        updatedAt: '2026-08-10T08:00:00Z',
+      },
+      {
+        uid: 'user-teacher-2',
+        email: 'ustadzah.nurul@sibersih.id',
+        displayName: 'Ustadzah Nurul Latifah',
+        role: 'teacher',
+        phoneNumber: '085811223344',
+        isActive: true,
+        createdAt: '2026-08-10T08:00:00Z',
+        updatedAt: '2026-08-10T08:00:00Z',
+      },
+    ]);
+  },
+
+  async createUserAccount(params: {
+    displayName: string;
+    email: string;
+    password: string;
+    role: UserRole;
+    phoneNumber?: string;
+  }): Promise<UserProfile> {
+    const trimmedEmail = params.email.trim();
+    const trimmedName = params.displayName.trim();
+    const trimmedPhone = params.phoneNumber?.trim() || undefined;
+
+    if (!isFirebaseConfigured || !db) {
+      // Mode offline / demo preview
+      const mockUid = `user-${Date.now()}`;
+      const mockProfile: UserProfile = {
+        uid: mockUid,
+        email: trimmedEmail,
+        displayName: trimmedName,
+        role: params.role,
+        phoneNumber: trimmedPhone,
+        isActive: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const existing = await this.getUsers();
+      setLocalCollection(STORAGE_KEYS.users, [mockProfile, ...existing]);
+      return mockProfile;
+    }
+
+    // FIREBASE LIVE: Instance Auth Sekunder agar sesi Admin yang sedang login TIDAK logout
+    const secondaryAppName = `SecondaryAuth-${Date.now()}`;
+    const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
+    const secondaryAuth = getAuth(secondaryApp);
+
+    let newUid: string;
+    let newAuthUser: any;
+
+    try {
+      const userCredential = await createUserWithEmailAndPassword(
+        secondaryAuth,
+        trimmedEmail,
+        params.password
+      );
+      newAuthUser = userCredential.user;
+      newUid = newAuthUser.uid;
+    } catch (authError: any) {
+      try {
+        await deleteApp(secondaryApp);
+      } catch {}
+
+      if (authError?.code === 'auth/email-already-in-use') {
+        throw new Error('Email ini sudah terdaftar di Firebase Authentication. Gunakan email lain.');
+      }
+      if (authError?.code === 'auth/invalid-email') {
+        throw new Error('Format email tidak valid.');
+      }
+      if (authError?.code === 'auth/weak-password') {
+        throw new Error('Kata sandi terlalu lemah. Minimal 6 karakter.');
+      }
+      throw new Error(`Gagal membuat akun Firebase Authentication: ${authError?.message || authError}`);
+    }
+
+    // Tulis dokumen profil ke Cloud Firestore users/{newUid} menggunakan instance Firestore utama (konteks Admin)
+    const newProfile: UserProfile = {
+      uid: newUid,
+      email: trimmedEmail,
+      displayName: trimmedName,
+      role: params.role,
+      phoneNumber: trimmedPhone,
+      isActive: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    try {
+      const userDocRef = doc(db, 'users', newUid);
+      await setDoc(userDocRef, newProfile);
+    } catch (firestoreError: any) {
+      // Rollback: Hapus akun Auth sekunder jika gagal menulis profil Firestore
+      try {
+        await newAuthUser.delete();
+      } catch (cleanupErr) {
+        console.error('[Rollback Warning] Gagal menghapus akun Auth saat rollback Firestore:', cleanupErr);
+      }
+      throw new Error(
+        `Akun autentikasi sempat dibuat namun gagal menyimpan profil ke Firestore: ${
+          firestoreError?.message || firestoreError
+        }. Akun telah di-rollback.`
+      );
+    } finally {
+      // Selalu lakukan sign-out dan hapus instance app sekunder
+      try {
+        await signOut(secondaryAuth);
+        await deleteApp(secondaryApp);
+      } catch (cleanupErr) {
+        console.warn('Pembersihan secondary Firebase app selesai dengan catatan:', cleanupErr);
+      }
+    }
+
+    return newProfile;
   },
 };

@@ -13,13 +13,14 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
     
-    // FIX 3: Enforce isActive == true for all role authorizations
-    function getUserRole() {
-      return (isAuthenticated() && getUserData().isActive == true) 
-        ? getUserData().role 
-        : null;
+    // FIX Audit 06: Dedicated helper for active authenticated users
+    function isActiveUser() {
+      return isAuthenticated() && getUserData().isActive == true;
     }
-
+    
+    function getUserRole() {
+      return isActiveUser() ? getUserData().role : null;
+    }
     
     function isAdmin() {
       return getUserRole() == 'admin';
@@ -33,19 +34,44 @@ service cloud.firestore {
       return getUserRole() == 'teacher';
     }
 
-    // FIX 5: Optimized to evaluate getUserRole() once
     function isCleanerOrAdmin() {
       let role = getUserRole();
       return role == 'admin' || role == 'cleaner';
     }
 
-    // FIX 1: Helper to verify if request.auth.uid is assigned teacher of classId
+    // Helper to verify if request.auth.uid is assigned teacher of classId
     function isClassTeacher(classId) {
       return isTeacher() && classId != null && (
         exists(/databases/$(database)/documents/teacher_class_assignments/$(request.auth.uid + '_' + classId)) ||
         (exists(/databases/$(database)/documents/classes/$(classId)) &&
          get(/databases/$(database)/documents/classes/$(classId)).data.homeroomTeacherId == request.auth.uid)
       );
+    }
+
+    // FIX Audit 06: Helper to verify if teacher owns the parent inspection of an item
+    function isInspectionItemClassTeacher(inspectionId) {
+      return isTeacher() && inspectionId != null &&
+        exists(/databases/$(database)/documents/inspections/$(inspectionId)) &&
+        isClassTeacher(get(/databases/$(database)/documents/inspections/$(inspectionId)).data.classId);
+    }
+
+    // FIX Audit 06: Strict payment transition validation for Cleaner
+    function isValidCleanerPenaltyPayment() {
+      return isCleaner() &&
+        resource.data.status == 'pending' &&
+        request.resource.data.status == 'paid' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'paidAt', 'paidReceivedById', 'receiptNumber', 'updatedAt'
+        ]) &&
+        request.resource.data.amount == resource.data.amount &&
+        request.resource.data.violationId == resource.data.violationId &&
+        request.resource.data.classId == resource.data.classId &&
+        request.resource.data.issuedById == resource.data.issuedById &&
+        request.resource.data.issuedDate == resource.data.issuedDate &&
+        request.resource.data.responsiblePerson == resource.data.responsiblePerson &&
+        request.resource.data.paidAt != null &&
+        request.resource.data.paidReceivedById != null &&
+        request.resource.data.receiptNumber != null;
     }
 
     // ============================================================
@@ -62,7 +88,7 @@ service cloud.firestore {
     // CLASSES COLLECTION
     // ============================================================
     match /classes/{classId} {
-      allow read: if isAuthenticated();
+      allow read: if isActiveUser();
       allow write: if isAdmin();
     }
 
@@ -76,103 +102,91 @@ service cloud.firestore {
 
     // ============================================================
     // AREAS COLLECTION
-    // FIX 3: Cleaner/Admin can create/update, delete ONLY Admin
     // ============================================================
     match /areas/{areaId} {
-      allow read: if isAuthenticated();
+      allow read: if isActiveUser();
       allow create, update: if isCleanerOrAdmin();
       allow delete: if isAdmin();
     }
 
     // ============================================================
     // SCHEDULES COLLECTION
-    // FIX 3: Cleaner/Admin can create/update, delete ONLY Admin
     // ============================================================
     match /schedules/{scheduleId} {
-      allow read: if isAuthenticated();
+      allow read: if isActiveUser();
       allow create, update: if isCleanerOrAdmin();
       allow delete: if isAdmin();
     }
 
     // ============================================================
     // INSPECTIONS & INSPECTION ITEMS
-    // FIX 1: Teacher can ONLY read inspections for their assigned class
-    // FIX 4: Creator UID binding on create & update (inspectorId == request.auth.uid)
     // ============================================================
     match /inspections/{inspectionId} {
       allow read: if isCleanerOrAdmin() || (resource.data.classId != null && isClassTeacher(resource.data.classId));
       allow create: if isAdmin() || (isCleaner() && request.resource.data.inspectorId == request.auth.uid);
-      allow update: if isAdmin() || (isCleaner() && resource.data.inspectorId == request.auth.uid);
+      allow update: if isAdmin() || (isCleaner() && resource.data.inspectorId == request.auth.uid && request.resource.data.inspectorId == resource.data.inspectorId);
       allow delete: if isAdmin();
     }
 
     match /inspection_items/{itemId} {
-      allow read: if isAuthenticated();
+      allow read: if isCleanerOrAdmin() || (resource.data.inspectionId != null && isInspectionItemClassTeacher(resource.data.inspectionId));
       allow create, update: if isCleanerOrAdmin();
       allow delete: if isAdmin();
     }
 
     // ============================================================
     // VIOLATION TYPES & PENALTY RULES
-    // FIX 2: Admin only for write. Cleaner/Teacher READ ONLY.
     // ============================================================
     match /violation_types/{typeId} {
-      allow read: if isAuthenticated();
+      allow read: if isActiveUser();
       allow write: if isAdmin();
     }
 
     match /penalty_rules/{ruleId} {
-      allow read: if isAuthenticated();
+      allow read: if isActiveUser();
       allow write: if isAdmin();
     }
 
     // ============================================================
     // VIOLATIONS
-    // FIX 1: Teacher can ONLY read violations for their assigned class
-    // FIX 4: Creator UID binding on create & update (reportedById == request.auth.uid)
     // ============================================================
     match /violations/{violationId} {
       allow read: if isCleanerOrAdmin() || (resource.data.classId != null && isClassTeacher(resource.data.classId));
       allow create: if isAdmin() || (isCleaner() && request.resource.data.reportedById == request.auth.uid);
-      allow update: if isAdmin() || (isCleaner() && resource.data.reportedById == request.auth.uid);
+      allow update: if isAdmin() || (isCleaner() && resource.data.reportedById == request.auth.uid && request.resource.data.reportedById == resource.data.reportedById);
       allow delete: if isAdmin();
     }
 
     // ============================================================
     // PENALTIES
-    // FIX 1: Teacher can ONLY read penalties for their assigned class
-    // FIX 4: Creator UID binding on create (issuedById == request.auth.uid)
     // ============================================================
     match /penalties/{penaltyId} {
       allow read: if isCleanerOrAdmin() || (resource.data.classId != null && isClassTeacher(resource.data.classId));
       allow create: if isAdmin() || (isCleaner() && request.resource.data.issuedById == request.auth.uid);
-      allow update: if isCleanerOrAdmin();
+      allow update: if isAdmin() || isValidCleanerPenaltyPayment();
       allow delete: if isAdmin();
     }
 
     // ============================================================
     // PHOTOS COLLECTION
-    // FIX 4: Creator UID binding on create & delete (uploadedById == request.auth.uid)
     // ============================================================
     match /photos/{photoId} {
-      allow read: if isAuthenticated();
+      allow read: if isActiveUser();
       allow create: if isAdmin() || (isCleaner() && request.resource.data.uploadedById == request.auth.uid);
       allow update, delete: if isAdmin() || (isCleaner() && resource.data.uploadedById == request.auth.uid);
     }
 
     // ============================================================
     // INVENTORIES & INVENTORY LOGS
-    // FIX 2: Cleaner CANNOT delete inventory
-    // FIX 4: Creator UID binding on create (performedById == request.auth.uid)
     // ============================================================
     match /inventories/{inventoryId} {
-      allow read: if isAuthenticated();
+      allow read: if isActiveUser();
       allow create, update: if isCleanerOrAdmin();
       allow delete: if isAdmin();
     }
 
     match /inventory_logs/{logId} {
-      allow read: if isAuthenticated();
+      allow read: if isActiveUser();
       allow create: if isAdmin() || (isCleaner() && request.resource.data.performedById == request.auth.uid);
       allow update, delete: if isAdmin();
     }

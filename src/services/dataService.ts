@@ -6,8 +6,11 @@ import {
   updateDoc,
   query,
   where,
+  writeBatch,
+  runTransaction,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../config/firebase';
+
 import * as seed from './seedData';
 import type {
   ClassRoom,
@@ -203,12 +206,16 @@ export const DataService = {
     }));
 
     if (isFirebaseConfigured && db) {
-      await setDoc(doc(db, 'inspections', inspectionId), newInspection);
+      // FIX 2: Atomic writeBatch for inspection + all items
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'inspections', inspectionId), newInspection);
       for (const it of newItems) {
-        await setDoc(doc(db, 'inspection_items', it.id), it);
+        batch.set(doc(db, 'inspection_items', it.id), it);
       }
+      await batch.commit();
       return newInspection;
     }
+
 
     const currentInspections = getLocalCollection<Inspection>(STORAGE_KEYS.inspections, seed.INITIAL_INSPECTIONS);
     setLocalCollection(STORAGE_KEYS.inspections, [newInspection, ...currentInspections]);
@@ -270,6 +277,55 @@ export const DataService = {
     setLocalCollection(STORAGE_KEYS.violations, [item, ...current]);
     return item;
   },
+
+  // FIX 3: Atomic creation of Violation + Penalty via writeBatch
+  async createViolationWithPenalty(
+    violationData: Omit<Violation, 'id' | 'createdAt' | 'updatedAt'>,
+    penaltyData?: Omit<Penalty, 'id' | 'violationId' | 'createdAt' | 'updatedAt'>
+  ): Promise<{ violation: Violation; penalty?: Penalty }> {
+    const violationId = `viol-${Date.now()}`;
+    const newViolation: Violation = {
+      ...violationData,
+      id: violationId,
+      penaltyCreated: !!penaltyData,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    let newPenalty: Penalty | undefined;
+    if (penaltyData) {
+      const penaltyId = `pen-${Date.now()}`;
+      newPenalty = {
+        ...penaltyData,
+        id: penaltyId,
+        violationId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    }
+
+    if (isFirebaseConfigured && db) {
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'violations', violationId), newViolation);
+      if (newPenalty) {
+        batch.set(doc(db, 'penalties', newPenalty.id), newPenalty);
+      }
+      await batch.commit();
+      return { violation: newViolation, penalty: newPenalty };
+    }
+
+    // Offline / Demo Fallback Mode
+    const currentViolations = getLocalCollection<Violation>(STORAGE_KEYS.violations, seed.INITIAL_VIOLATIONS);
+    setLocalCollection(STORAGE_KEYS.violations, [newViolation, ...currentViolations]);
+
+    if (newPenalty) {
+      const currentPenalties = getLocalCollection<Penalty>(STORAGE_KEYS.penalties, seed.INITIAL_PENALTIES);
+      setLocalCollection(STORAGE_KEYS.penalties, [newPenalty, ...currentPenalties]);
+    }
+
+    return { violation: newViolation, penalty: newPenalty };
+  },
+
 
   // ============================================================
   // PENALTIES
@@ -349,6 +405,7 @@ export const DataService = {
     return getLocalCollection<InventoryLog>(STORAGE_KEYS.inventory_logs, seed.INITIAL_INVENTORY_LOGS);
   },
 
+  // FIX 1: Atomic update of inventory stock and logs via runTransaction
   async updateInventoryStock(
     inventoryId: string,
     action: InventoryLog['action'],
@@ -357,12 +414,63 @@ export const DataService = {
     userName: string,
     notes?: string
   ): Promise<void> {
+    if (isFirebaseConfigured && db) {
+      const invRef = doc(db, 'inventories', inventoryId);
+      const logId = `log-${Date.now()}`;
+      const logRef = doc(db, 'inventory_logs', logId);
+
+      await runTransaction(db, async (transaction) => {
+        const invSnap = await transaction.get(invRef);
+        if (!invSnap.exists()) {
+          throw new Error('Barang inventaris tidak ditemukan di database.');
+        }
+        const invData = invSnap.data() as InventoryItem;
+        const previousStock = invData.stock;
+        const newStock = previousStock + quantityChanged;
+
+        // Constraint: Stock cannot become negative
+        if (newStock < 0) {
+          throw new Error(
+            `Stok tidak mencukupi! Sisa stok saat ini: ${previousStock} ${invData.unit}, permintaan: ${Math.abs(quantityChanged)} ${invData.unit}.`
+          );
+        }
+
+        const log: InventoryLog = {
+          id: logId,
+          inventoryId,
+          inventoryName: invData.name,
+          action,
+          quantityChanged,
+          previousStock,
+          newStock,
+          performedById: userId,
+          performedByName: userName,
+          notes,
+          createdAt: new Date().toISOString(),
+        };
+
+        transaction.update(invRef, {
+          stock: newStock,
+          updatedAt: new Date().toISOString(),
+        });
+        transaction.set(logRef, log);
+      });
+      return;
+    }
+
+    // Offline / Demo Fallback Mode
     const items = await this.getInventories();
     const target = items.find((i) => i.id === inventoryId);
     if (!target) throw new Error('Barang inventaris tidak ditemukan');
 
     const previousStock = target.stock;
-    const newStock = Math.max(0, previousStock + quantityChanged);
+    const newStock = previousStock + quantityChanged;
+
+    if (newStock < 0) {
+      throw new Error(
+        `Stok tidak mencukupi! Sisa stok saat ini: ${previousStock} ${target.unit}, permintaan: ${Math.abs(quantityChanged)} ${target.unit}.`
+      );
+    }
 
     const log: InventoryLog = {
       id: `log-${Date.now()}`,
@@ -378,15 +486,6 @@ export const DataService = {
       createdAt: new Date().toISOString(),
     };
 
-    if (isFirebaseConfigured && db) {
-      await updateDoc(doc(db, 'inventories', inventoryId), {
-        stock: newStock,
-        updatedAt: new Date().toISOString(),
-      });
-      await setDoc(doc(db, 'inventory_logs', log.id), log);
-      return;
-    }
-
     const updatedItems = items.map((i) =>
       i.id === inventoryId ? { ...i, stock: newStock, updatedAt: new Date().toISOString() } : i
     );
@@ -395,6 +494,7 @@ export const DataService = {
     const logs = getLocalCollection<InventoryLog>(STORAGE_KEYS.inventory_logs, seed.INITIAL_INVENTORY_LOGS);
     setLocalCollection(STORAGE_KEYS.inventory_logs, [log, ...logs]);
   },
+
 
   // ============================================================
   // TEACHER ASSIGNMENTS

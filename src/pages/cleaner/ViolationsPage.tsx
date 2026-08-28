@@ -88,41 +88,44 @@ export const ViolationsPage: React.FC = () => {
       const area = areas.find((a) => a.id === selectedAreaId);
       const vtype = violationTypes.find((t) => t.id === selectedTypeId);
 
-      const newViolation = await DataService.addViolation({
-        areaId: selectedAreaId,
-        areaName: area ? area.name : 'Area',
-        classId: area?.classId,
-        className: area?.name,
-        violationTypeId: selectedTypeId,
-        violationTypeName: vtype ? vtype.name : 'Pelanggaran',
-        severity,
-        description,
-        reportedById: currentUser?.uid || 'cleaner-1',
-        reportedByName: currentUser?.displayName || 'Petugas Kebersihan',
-        date: new Date().toISOString().split('T')[0],
-        photoUrls: photoUrl ? [photoUrl] : [],
-        penaltyCreated: createPenalty,
-      });
+      // FIX 3: Atomic creation of Violation + Penalty
+      const matchingRule = createPenalty ? penaltyRules.find((r) => r.violationTypeId === selectedTypeId) : undefined;
+      const amount = matchingRule ? matchingRule.fineAmount : vtype?.defaultPenaltyAmount || 25000;
 
-      // If user enabled penalty creation, automatically generate a penalty record
-      if (createPenalty) {
-        const matchingRule = penaltyRules.find((r) => r.violationTypeId === selectedTypeId);
-        const amount = matchingRule ? matchingRule.fineAmount : vtype?.defaultPenaltyAmount || 25000;
+      const penaltyPayload = createPenalty
+        ? {
+            classId: area?.classId,
+            className: area?.name,
+            responsiblePerson: responsiblePerson || `Piket ${area?.name || 'Kelas'}`,
+            amount,
+            reason: `${vtype?.name || 'Pelanggaran Kebersihan'}: ${description}`,
+            status: 'pending' as const,
+            issuedById: currentUser?.uid || 'cleaner-1',
+            issuedByName: currentUser?.displayName || 'Petugas Kebersihan',
+            issuedDate: new Date().toISOString().split('T')[0],
+            notes: 'Wajib diselesaikan dalam waktu 2x24 jam.',
+          }
+        : undefined;
 
-        await DataService.addPenalty({
-          violationId: newViolation.id,
+      await DataService.createViolationWithPenalty(
+        {
+          areaId: selectedAreaId,
+          areaName: area ? area.name : 'Area',
           classId: area?.classId,
           className: area?.name,
-          responsiblePerson: responsiblePerson || `Piket ${area?.name || 'Kelas'}`,
-          amount,
-          reason: `${vtype?.name || 'Pelanggaran Kebersihan'}: ${description}`,
-          status: 'pending',
-          issuedById: currentUser?.uid || 'cleaner-1',
-          issuedByName: currentUser?.displayName || 'Petugas Kebersihan',
-          issuedDate: new Date().toISOString().split('T')[0],
-          notes: 'Wajib diselesaikan dalam waktu 2x24 jam.',
-        });
-      }
+          violationTypeId: selectedTypeId,
+          violationTypeName: vtype ? vtype.name : 'Pelanggaran',
+          severity,
+          description,
+          reportedById: currentUser?.uid || 'cleaner-1',
+          reportedByName: currentUser?.displayName || 'Petugas Kebersihan',
+          date: new Date().toISOString().split('T')[0],
+          photoUrls: photoUrl ? [photoUrl] : [],
+          penaltyCreated: createPenalty,
+        },
+        penaltyPayload
+      );
+
 
       setIsCreateModalOpen(false);
       setDescription('');

@@ -7,6 +7,7 @@ import {
   Calendar,
   MapPin,
   AlertTriangle,
+  AlertCircle,
 } from 'lucide-react';
 
 import {
@@ -22,7 +23,14 @@ import {
 } from '../../components/common';
 import { DataService } from '../../services/dataService';
 import { useAuth } from '../../contexts/AuthContext';
-import type { Area, Inspection, InspectionItem } from '../../types';
+import type {
+  Area,
+  Inspection,
+  InspectionItem,
+  ViolationType,
+  PenaltyRule,
+  ViolationSeverity,
+} from '../../types';
 
 interface ChecklistFormItem {
   name: string;
@@ -39,10 +47,56 @@ const DEFAULT_CHECKLIST_TEMPLATE: ChecklistFormItem[] = [
   { name: 'Jendela, Pintu & Ventilasi Udara', passed: true, score: 90, notes: '' },
 ];
 
+// Helper: Menentukan jenis pelanggaran yang paling relevan berdasarkan item checklist yang gagal
+const getMatchingViolationType = (
+  failedItems: ChecklistFormItem[],
+  types: ViolationType[]
+): ViolationType | undefined => {
+  for (const item of failedItems) {
+    const lower = item.name.toLowerCase();
+    // 1. Sampah / Kolong Meja / Kursi -> vt-1 (Sampah Menumpuk Tidak Dibuang)
+    if (lower.includes('sampah') || lower.includes('kolong') || lower.includes('kursi')) {
+      const match = types.find(
+        (t) => t.id === 'vt-1' || t.name.toLowerCase().includes('sampah')
+      );
+      if (match) return match;
+    }
+    // 2. Coretan / Vandalisme -> vt-2 (Coretan Meja / Dinding)
+    if (lower.includes('coretan') || lower.includes('dinding')) {
+      const match = types.find(
+        (t) => t.id === 'vt-2' || t.name.toLowerCase().includes('coretan')
+      );
+      if (match) return match;
+    }
+    // 3. Papan Tulis -> vt-3 (Papan Tulis Belum Dihapus)
+    if (lower.includes('papan') || lower.includes('penghapus')) {
+      const match = types.find(
+        (t) => t.id === 'vt-3' || t.name.toLowerCase().includes('papan')
+      );
+      if (match) return match;
+    }
+    // 4. Lantai -> vt-4 (Lantai Kotor / Noda Minuman)
+    if (lower.includes('lantai')) {
+      const match = types.find(
+        (t) => t.id === 'vt-4' || t.name.toLowerCase().includes('lantai')
+      );
+      if (match) return match;
+    }
+  }
+  // Fallback ke tipe aktif pertama atau tipe pertama di koleksi
+  return types.find((t) => t.isActive) || types[0];
+};
+
 export const InspectionsPage: React.FC = () => {
   const { currentUser } = useAuth();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
+  const [violationTypes, setViolationTypes] = useState<ViolationType[]>([]);
+  const [penaltyRules, setPenaltyRules] = useState<PenaltyRule[]>([]);
+  const [feedbackMessage, setFeedbackMessage] = useState<{
+    type: 'success' | 'warning' | 'error';
+    text: string;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modal States
@@ -60,13 +114,17 @@ export const InspectionsPage: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [insp, ar] = await Promise.all([
+      const [insp, ar, vt, pr] = await Promise.all([
         DataService.getInspections(),
         DataService.getAreas(),
+        DataService.getViolationTypes(),
+        DataService.getPenaltyRules(),
       ]);
       const activeAreas = ar.filter((a) => a.isActive);
       setInspections(insp);
       setAreas(ar);
+      setViolationTypes(vt);
+      setPenaltyRules(pr);
       if (activeAreas.length > 0 && !selectedAreaId) {
         setSelectedAreaId(activeAreas[0].id);
       }
@@ -119,9 +177,19 @@ export const InspectionsPage: React.FC = () => {
 
   const handleCreateInspection = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAreaId) return;
+    if (!selectedAreaId || isSubmitting) return;
+
+    if (!currentUser) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Sesi login tidak valid. Silakan login kembali.',
+      });
+      return;
+    }
 
     setIsSubmitting(true);
+    setFeedbackMessage(null);
+
     try {
       const area = areas.find((a) => a.id === selectedAreaId);
       const totalScore = Math.round(
@@ -140,8 +208,8 @@ export const InspectionsPage: React.FC = () => {
           areaId: selectedAreaId,
           areaName: area ? area.name : 'Area',
           classId: area?.classId,
-          inspectorId: currentUser?.uid || 'cleaner-1',
-          inspectorName: currentUser?.displayName || 'Petugas Kebersihan',
+          inspectorId: currentUser.uid,
+          inspectorName: currentUser.displayName || 'Petugas Kebersihan',
           date: inspectionDate,
           status: 'completed',
           overallGrade,
@@ -158,36 +226,89 @@ export const InspectionsPage: React.FC = () => {
         }))
       );
 
-      // If violations found, create a violation record automatically
-      // FIX 4: Bind inspectionId so automatic violation links to its parent inspection
+      // Jika ada item checklist yang tidak lolos, catat pelanggaran dan cari aturan denda yang berlaku
       if (hasViolations && area) {
         const failedItems = checklistItems.filter((i) => !i.passed);
-        await DataService.createViolationWithPenalty({
-          inspectionId: newInspection.id,
-          areaId: area.id,
-          areaName: area.name,
-          classId: area.classId,
-          className: area.name,
-          violationTypeId: 'vt-1',
-          violationTypeName: 'Ketidaksesuaian Standar Kebersihan',
-          severity: totalScore < 60 ? 'high' : 'medium',
-          description: `Item gagal: ${failedItems.map((f) => f.name).join(', ')}. Catatan: ${overallNotes || '-'}`,
-          reportedById: currentUser?.uid || 'cleaner-1',
-          reportedByName: currentUser?.displayName || 'Petugas Kebersihan',
-          date: inspectionDate,
-          photoUrls: [],
-          penaltyCreated: false,
+
+        // Tentukan violation type berdasarkan item yang gagal
+        const matchedType = getMatchingViolationType(failedItems, violationTypes);
+        const violationTypeId = matchedType?.id || 'vt-1';
+        const violationTypeName = matchedType?.name || 'Ketidaksesuaian Standar Kebersihan';
+        const severity: ViolationSeverity = totalScore < 60 ? 'high' : 'medium';
+
+        // Cari aturan denda aktif yang cocok dengan jenis pelanggaran
+        const matchingRule = penaltyRules.find(
+          (r) => r.isActive && r.violationTypeId === violationTypeId
+        );
+
+        let penaltyPayload = undefined;
+        let penaltyCreated = false;
+
+        if (matchingRule) {
+          penaltyCreated = true;
+          penaltyPayload = {
+            classId: area.classId,
+            className: area.name,
+            responsiblePerson: area.classId ? `Ketua Piket ${area.name}` : `Penanggung Jawab ${area.name}`,
+            amount: matchingRule.fineAmount,
+            reason: `${violationTypeName}: ${failedItems.map((f) => f.name).join(', ')}`,
+            status: 'pending' as const,
+            issuedById: currentUser.uid,
+            issuedByName: currentUser.displayName || 'Petugas Kebersihan',
+            issuedDate: inspectionDate,
+            notes: `Diterbitkan otomatis dari hasil inspeksi (${overallGrade.toUpperCase()}). Aturan denda: ${matchingRule.description || matchingRule.violationTypeName}.`,
+          };
+        }
+
+        await DataService.createViolationWithPenalty(
+          {
+            inspectionId: newInspection.id,
+            areaId: area.id,
+            areaName: area.name,
+            classId: area.classId,
+            className: area.name,
+            violationTypeId,
+            violationTypeName,
+            severity,
+            description: `Item gagal: ${failedItems.map((f) => f.name).join(', ')}. Catatan: ${overallNotes || '-'}`,
+            reportedById: currentUser.uid,
+            reportedByName: currentUser.displayName || 'Petugas Kebersihan',
+            date: inspectionDate,
+            photoUrls: [],
+            penaltyCreated,
+          },
+          penaltyPayload
+        );
+
+        if (matchingRule) {
+          setFeedbackMessage({
+            type: 'success',
+            text: `Pemeriksaan ${area.name} selesai (${overallGrade.toUpperCase()}). Pelanggaran "${violationTypeName}" tercatat dan sanksi denda sebesar Rp ${matchingRule.fineAmount.toLocaleString('id-ID')} otomatis diterbitkan.`,
+          });
+        } else {
+          setFeedbackMessage({
+            type: 'warning',
+            text: `Pemeriksaan ${area.name} selesai. Pelanggaran "${violationTypeName}" tercatat, namun tidak ada aturan denda yang berlaku untuk jenis pelanggaran ini.`,
+          });
+        }
+      } else if (area) {
+        setFeedbackMessage({
+          type: 'success',
+          text: `Pemeriksaan ${area.name} selesai. Seluruh item checklist bersih dan memenuhi standar kebersihan.`,
         });
       }
-
 
       setIsCreateModalOpen(false);
       // Reset form
       setChecklistItems(DEFAULT_CHECKLIST_TEMPLATE);
       setOverallNotes('');
       await loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to create inspection', err);
+      setFeedbackMessage({
+        type: 'error',
+        text: err?.message || 'Gagal menyimpan hasil pemeriksaan.',
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -214,6 +335,37 @@ export const InspectionsPage: React.FC = () => {
           Periksa Baru
         </Button>
       </div>
+
+      {/* Feedback Banner */}
+      {feedbackMessage && (
+        <div
+          className={`p-3 rounded-xl text-xs font-medium flex items-center justify-between animate-in fade-in duration-200 ${
+            feedbackMessage.type === 'success'
+              ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
+              : feedbackMessage.type === 'warning'
+              ? 'bg-amber-50 text-amber-800 border border-amber-200'
+              : 'bg-rose-50 text-rose-800 border border-rose-200'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {feedbackMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+            ) : feedbackMessage.type === 'warning' ? (
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+            )}
+            <span>{feedbackMessage.text}</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => setFeedbackMessage(null)}
+            className="text-xs underline ml-2 opacity-70 hover:opacity-100 cursor-pointer"
+          >
+            Tutup
+          </button>
+        </div>
+      )}
 
       {/* Inspections List */}
       {inspections.length === 0 ? (
@@ -382,7 +534,7 @@ export const InspectionsPage: React.FC = () => {
             >
               Batal
             </Button>
-            <Button type="submit" variant="primary" isLoading={isSubmitting}>
+            <Button type="submit" variant="primary" isLoading={isSubmitting} disabled={isSubmitting}>
               Simpan Hasil Pemeriksaan
             </Button>
           </div>

@@ -74,6 +74,32 @@ service cloud.firestore {
         request.resource.data.receiptNumber != null;
     }
 
+    // Strict cancellation transition validation for Cleaner
+    function isValidCleanerPenaltyCancellation() {
+      return isCleaner() &&
+        resource.data.status != 'cancelled' &&
+        request.resource.data.status == 'cancelled' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'cancelledAt', 'cancelledById', 'cancelledByName', 'cancellationReason', 'updatedAt'
+        ]) &&
+        request.resource.data.cancelledAt != null &&
+        request.resource.data.cancelledById == request.auth.uid &&
+        request.resource.data.cancellationReason != null;
+    }
+
+    // Strict violation cancellation transition validation for Cleaner
+    function isValidCleanerViolationCancellation() {
+      return isCleaner() &&
+        resource.data.status != 'cancelled' &&
+        request.resource.data.status == 'cancelled' &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'status', 'cancelledAt', 'cancelledById', 'cancelledByName', 'cancellationReason', 'updatedAt'
+        ]) &&
+        request.resource.data.cancelledAt != null &&
+        request.resource.data.cancelledById == request.auth.uid &&
+        request.resource.data.cancellationReason != null;
+    }
+
     // ============================================================
     // USERS COLLECTION
     // ============================================================
@@ -153,7 +179,7 @@ service cloud.firestore {
     match /violations/{violationId} {
       allow read: if isCleanerOrAdmin() || (resource.data.classId != null && isClassTeacher(resource.data.classId));
       allow create: if isAdmin() || (isCleaner() && request.resource.data.reportedById == request.auth.uid);
-      allow update: if isAdmin() || (isCleaner() && resource.data.reportedById == request.auth.uid && request.resource.data.reportedById == resource.data.reportedById);
+      allow update: if isAdmin() || (isCleaner() && resource.data.reportedById == request.auth.uid && request.resource.data.reportedById == resource.data.reportedById) || isValidCleanerViolationCancellation();
       allow delete: if isAdmin();
     }
 
@@ -163,7 +189,7 @@ service cloud.firestore {
     match /penalties/{penaltyId} {
       allow read: if isCleanerOrAdmin() || (resource.data.classId != null && isClassTeacher(resource.data.classId));
       allow create: if isAdmin() || (isCleaner() && request.resource.data.issuedById == request.auth.uid);
-      allow update: if isAdmin() || isValidCleanerPenaltyPayment();
+      allow update: if isAdmin() || isValidCleanerPenaltyPayment() || isValidCleanerPenaltyCancellation();
       allow delete: if isAdmin();
     }
 

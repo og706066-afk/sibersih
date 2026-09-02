@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, CheckCircle2 } from 'lucide-react';
+import { Calendar, CheckCircle2, Ban } from 'lucide-react';
 
 import { Card, Badge, Modal, LoadingState, EmptyState } from '../../components/common';
 import { useAuth } from '../../contexts/AuthContext';
@@ -99,14 +99,33 @@ export const TeacherViolationsPage: React.FC = () => {
                     <span className="text-xs font-bold text-rose-700">{viol.violationTypeName}</span>
                     <p className="text-xs text-slate-500 mt-0.5">{viol.areaName}</p>
                   </div>
-                  <Badge variant={viol.severity === 'high' ? 'danger' : 'warning'} size="sm">
-                    {viol.severity === 'high' ? 'Tinggi' : 'Sedang'}
-                  </Badge>
+                  <div className="flex items-center gap-1">
+                    {(viol.status === 'cancelled' || relatedPenalty?.status === 'cancelled') && (
+                      <Badge variant="neutral" size="sm">
+                        Dibatalkan
+                      </Badge>
+                    )}
+                    <Badge variant={viol.severity === 'high' ? 'danger' : 'warning'} size="sm">
+                      {viol.severity === 'high' ? 'Tinggi' : 'Sedang'}
+                    </Badge>
+                  </div>
                 </div>
 
                 <p className="text-xs text-slate-600 mt-2 bg-slate-50 p-2.5 rounded-xl border border-slate-100 line-clamp-2">
                   {viol.description}
                 </p>
+
+                {(viol.status === 'cancelled' || relatedPenalty?.status === 'cancelled') && (
+                  <div className="text-xs bg-rose-50/70 p-2 rounded-lg border border-rose-200/80 mt-2 space-y-0.5">
+                    <div className="flex items-center gap-1 font-semibold text-rose-800 text-[11px]">
+                      <Ban className="w-3 h-3 text-rose-600" />
+                      <span>Sanksi Dibatalkan</span>
+                    </div>
+                    <p className="text-[11px] text-rose-700">
+                      Alasan: {viol.cancellationReason || relatedPenalty?.cancellationReason || 'Tanpa keterangan'}
+                    </p>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between mt-3 pt-2.5 border-t border-slate-100 text-[11px]">
                   <span className="flex items-center gap-1 text-slate-400">
@@ -115,12 +134,30 @@ export const TeacherViolationsPage: React.FC = () => {
 
                   {relatedPenalty ? (
                     <div className="flex items-center gap-1 font-semibold">
-                      <span className="text-slate-700">Rp {relatedPenalty.amount.toLocaleString('id-ID')}</span>
+                      <span
+                        className={
+                          relatedPenalty.status === 'cancelled'
+                            ? 'text-slate-400 line-through'
+                            : 'text-slate-700'
+                        }
+                      >
+                        Rp {relatedPenalty.amount.toLocaleString('id-ID')}
+                      </span>
                       <Badge
-                        variant={relatedPenalty.status === 'paid' ? 'success' : 'warning'}
+                        variant={
+                          relatedPenalty.status === 'paid'
+                            ? 'success'
+                            : relatedPenalty.status === 'cancelled'
+                            ? 'neutral'
+                            : 'warning'
+                        }
                         size="sm"
                       >
-                        {relatedPenalty.status === 'paid' ? 'Lunas' : 'Belum Lunas'}
+                        {relatedPenalty.status === 'paid'
+                          ? 'Lunas'
+                          : relatedPenalty.status === 'cancelled'
+                          ? 'Dibatalkan'
+                          : 'Belum Lunas'}
                       </Badge>
                     </div>
                   ) : (
@@ -159,12 +196,28 @@ export const TeacherViolationsPage: React.FC = () => {
             </div>
           )}
 
-          <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between text-xs">
-            <span className="font-semibold text-amber-900">Pemberitahuan:</span>
-            <span className="text-amber-800">
-              Mohon ingatkan piket santri terkait sanksi di atas.
-            </span>
-          </div>
+          {selectedViolation?.status === 'cancelled' ? (
+            <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 space-y-1 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-rose-900 flex items-center gap-1">
+                  <Ban className="w-3.5 h-3.5 text-rose-600" /> Status Pelanggaran:
+                </span>
+                <Badge variant="neutral" size="sm">
+                  Dibatalkan
+                </Badge>
+              </div>
+              <p className="text-rose-700">
+                <strong>Alasan Pembatalan:</strong> {selectedViolation.cancellationReason || 'Tanpa keterangan'}
+              </p>
+            </div>
+          ) : (
+            <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 flex items-center justify-between text-xs">
+              <span className="font-semibold text-amber-900">Pemberitahuan:</span>
+              <span className="text-amber-800">
+                Mohon ingatkan piket santri terkait sanksi di atas.
+              </span>
+            </div>
+          )}
         </div>
       </Modal>
     </div>

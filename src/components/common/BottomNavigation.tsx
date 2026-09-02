@@ -41,7 +41,8 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ role }) => {
           { to: '/admin', label: 'Beranda', icon: <LayoutDashboard className="w-5 h-5" /> },
           { to: '/admin/users', label: 'Pengguna', icon: <Users className="w-5 h-5" /> },
           { to: '/admin/areas', label: 'Area/Kelas', icon: <Building2 className="w-5 h-5" /> },
-          { to: '/admin/violations', label: 'Pelanggaran', icon: <AlertTriangle className="w-5 h-5" /> },
+          { to: '/admin/penalties', label: 'Denda & Kas', icon: <Receipt className="w-5 h-5" /> },
+          { to: '/admin/violations', label: 'Aturan', icon: <AlertTriangle className="w-5 h-5" /> },
           { to: '/admin/settings', label: 'Pengaturan', icon: <Settings className="w-5 h-5" /> },
         ];
       case 'teacher':

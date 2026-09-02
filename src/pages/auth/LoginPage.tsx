@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Sparkles, Shield, UserCheck, GraduationCap, Lock, Mail, ArrowRight } from 'lucide-react';
+import {
+  Sparkles,
+  Shield,
+  UserCheck,
+  GraduationCap,
+  Lock,
+  Mail,
+  ArrowRight,
+  Eye,
+  EyeOff,
+} from 'lucide-react';
 import { Button, Input, Badge } from '../../components/common';
 import { useAuth } from '../../contexts/AuthContext';
 import type { UserRole } from '../../types';
@@ -11,6 +21,7 @@ export const LoginPage: React.FC = () => {
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -173,12 +184,26 @@ export const LoginPage: React.FC = () => {
           />
 
           <Input
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             label="Kata Sandi"
             placeholder="••••••••"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             leftIcon={<Lock className="w-4 h-4 text-slate-400" />}
+            rightIcon={
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="pointer-events-auto p-1 text-slate-400 hover:text-slate-600 focus:outline-none focus:text-slate-700 transition-colors cursor-pointer flex items-center justify-center"
+                aria-label={showPassword ? 'Sembunyikan kata sandi' : 'Tampilkan kata sandi'}
+              >
+                {showPassword ? (
+                  <EyeOff className="w-4 h-4" />
+                ) : (
+                  <Eye className="w-4 h-4" />
+                )}
+              </button>
+            }
             required
           />
 

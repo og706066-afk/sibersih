@@ -96,7 +96,9 @@ export const AdminDashboard: React.FC = () => {
     return <LoadingState message="Memuat panel Developer/Admin..." />;
   }
 
-  const totalPenaltiesAmount = penalties.reduce((sum, p) => sum + p.amount, 0);
+  const totalPenaltiesAmount = penalties
+    .filter((p) => p.status !== 'cancelled')
+    .reduce((sum, p) => sum + p.amount, 0);
 
   return (
     <div className="space-y-4">
@@ -220,7 +222,11 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </Card>
 
-          <Card className="p-3 bg-white flex items-center justify-between">
+          <Card
+            hoverEffect
+            onClick={() => navigate('/admin/penalties')}
+            className="p-3 bg-white flex items-center justify-between cursor-pointer"
+          >
             <div>
               <span className="text-xs text-slate-500 font-medium">Total Kas Denda</span>
               <div className="text-sm font-bold text-amber-700 mt-1">
@@ -239,10 +245,29 @@ export const AdminDashboard: React.FC = () => {
       {/* Quick Navigation Panels */}
       <div className="space-y-2">
         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
-          Modul Konfigurasi
+          Modul Konfigurasi & Monitoring
         </h3>
 
         <div className="space-y-2">
+          <Card
+            hoverEffect
+            onClick={() => navigate('/admin/penalties')}
+            className="p-3 bg-white flex items-center justify-between"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-700 flex items-center justify-center">
+                <Receipt className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900">Monitoring Denda & Kas</h4>
+                <p className="text-[11px] text-slate-500">
+                  Pantau status pelunasan denda, pembatalan, dan penerimaan kas
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-slate-400" />
+          </Card>
+
           <Card
             hoverEffect
             onClick={() => navigate('/admin/users')}

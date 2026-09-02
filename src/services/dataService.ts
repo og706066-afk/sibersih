@@ -73,6 +73,25 @@ function setLocalCollection<T>(key: string, data: T[]): void {
   }
 }
 
+/**
+ * Membersihkan seluruh field bernilai undefined secara rekursif sebelum dikirim ke Cloud Firestore.
+ * Firestore SDK melempar error fatal jika menemukan value `undefined`:
+ * "Unsupported field value: undefined".
+ */
+export function sanitizeFirestorePayload<T extends Record<string, any>>(obj: T): T {
+  const cleaned: Record<string, any> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      if (value !== null && typeof value === 'object' && !Array.isArray(value) && !(value instanceof Date)) {
+        cleaned[key] = sanitizeFirestorePayload(value);
+      } else {
+        cleaned[key] = value;
+      }
+    }
+  }
+  return cleaned as T;
+}
+
 export const DataService = {
   // ============================================================
   // CLASSES
@@ -214,9 +233,9 @@ export const DataService = {
     if (isFirebaseConfigured && db) {
       // FIX 2: Atomic writeBatch for inspection + all items
       const batch = writeBatch(db);
-      batch.set(doc(db, 'inspections', inspectionId), newInspection);
+      batch.set(doc(db, 'inspections', inspectionId), sanitizeFirestorePayload(newInspection));
       for (const it of newItems) {
-        batch.set(doc(db, 'inspection_items', it.id), it);
+        batch.set(doc(db, 'inspection_items', it.id), sanitizeFirestorePayload(it));
       }
       await batch.commit();
       return newInspection;
@@ -269,13 +288,14 @@ export const DataService = {
   async addViolation(violationData: Omit<Violation, 'id' | 'createdAt' | 'updatedAt'>): Promise<Violation> {
     const item: Violation = {
       ...violationData,
+      status: violationData.status || 'reported',
       id: `viol-${Date.now()}`,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     if (isFirebaseConfigured && db) {
-      await setDoc(doc(db, 'violations', item.id), item);
+      await setDoc(doc(db, 'violations', item.id), sanitizeFirestorePayload(item));
       return item;
     }
 
@@ -292,6 +312,7 @@ export const DataService = {
     const violationId = `viol-${Date.now()}`;
     const newViolation: Violation = {
       ...violationData,
+      status: violationData.status || 'reported',
       id: violationId,
       penaltyCreated: !!penaltyData,
       createdAt: new Date().toISOString(),
@@ -312,9 +333,9 @@ export const DataService = {
 
     if (isFirebaseConfigured && db) {
       const batch = writeBatch(db);
-      batch.set(doc(db, 'violations', violationId), newViolation);
+      batch.set(doc(db, 'violations', violationId), sanitizeFirestorePayload(newViolation));
       if (newPenalty) {
-        batch.set(doc(db, 'penalties', newPenalty.id), newPenalty);
+        batch.set(doc(db, 'penalties', newPenalty.id), sanitizeFirestorePayload(newPenalty));
       }
       await batch.commit();
       return { violation: newViolation, penalty: newPenalty };
@@ -384,6 +405,9 @@ export const DataService = {
       if (existing.status === 'paid') {
         throw new Error('Denda ini sudah dilunasi sebelumnya.');
       }
+      if (existing.status === 'cancelled') {
+        throw new Error('Denda yang sudah dibatalkan tidak dapat dilunasi.');
+      }
 
       const updates: Partial<Penalty> = {
         status,
@@ -410,6 +434,9 @@ export const DataService = {
     if (existing.status === 'paid') {
       throw new Error('Denda ini sudah dilunasi sebelumnya.');
     }
+    if (existing.status === 'cancelled') {
+      throw new Error('Denda yang sudah dibatalkan tidak dapat dilunasi.');
+    }
 
     const updates: Partial<Penalty> = {
       status,
@@ -423,6 +450,134 @@ export const DataService = {
 
     const updated = current.map((p) => (p.id === id ? { ...p, ...updates } : p));
     setLocalCollection(STORAGE_KEYS.penalties, updated);
+  },
+
+  async cancelPenalty(
+    penaltyId: string,
+    cancelledById: string,
+    cancelledByName: string,
+    cancellationReason: string
+  ): Promise<{ penalty: Penalty; violation?: Violation }> {
+    const trimmedReason = (cancellationReason || '').trim();
+    if (!trimmedReason) {
+      throw new Error('Alasan pembatalan denda wajib diisi.');
+    }
+
+    const now = new Date().toISOString();
+
+    if (isFirebaseConfigured && db) {
+      const penRef = doc(db, 'penalties', penaltyId);
+      const penSnap = await getDoc(penRef);
+      if (!penSnap.exists()) {
+        throw new Error('Data denda tidak ditemukan.');
+      }
+      const existingPenalty = penSnap.data() as Penalty;
+
+      if (existingPenalty.status === 'cancelled') {
+        throw new Error('Denda ini sudah dibatalkan sebelumnya.');
+      }
+
+      const updatedPenalty: Penalty = {
+        ...existingPenalty,
+        status: 'cancelled',
+        cancelledAt: now,
+        cancelledById,
+        cancelledByName,
+        cancellationReason: trimmedReason,
+        updatedAt: now,
+      };
+
+      let updatedViolation: Violation | undefined;
+      const batch = writeBatch(db);
+      batch.update(
+        penRef,
+        sanitizeFirestorePayload({
+          status: 'cancelled',
+          cancelledAt: now,
+          cancelledById,
+          cancelledByName,
+          cancellationReason: trimmedReason,
+          updatedAt: now,
+        })
+      );
+
+      if (existingPenalty.violationId) {
+        const violRef = doc(db, 'violations', existingPenalty.violationId);
+        const violSnap = await getDoc(violRef);
+        if (violSnap.exists()) {
+          const existingViolation = violSnap.data() as Violation;
+          updatedViolation = {
+            ...existingViolation,
+            status: 'cancelled',
+            cancelledAt: now,
+            cancelledById,
+            cancelledByName,
+            cancellationReason: trimmedReason,
+            updatedAt: now,
+          };
+          batch.update(
+            violRef,
+            sanitizeFirestorePayload({
+              status: 'cancelled',
+              cancelledAt: now,
+              cancelledById,
+              cancelledByName,
+              cancellationReason: trimmedReason,
+              updatedAt: now,
+            })
+          );
+        }
+      }
+
+      await batch.commit();
+      return { penalty: updatedPenalty, violation: updatedViolation };
+    }
+
+    // Offline / Demo Fallback Mode
+    const currentPenalties = getLocalCollection<Penalty>(STORAGE_KEYS.penalties, seed.INITIAL_PENALTIES);
+    const existingPenalty = currentPenalties.find((p) => p.id === penaltyId);
+    if (!existingPenalty) {
+      throw new Error('Data denda tidak ditemukan.');
+    }
+    if (existingPenalty.status === 'cancelled') {
+      throw new Error('Denda ini sudah dibatalkan sebelumnya.');
+    }
+
+    const updatedPenalty: Penalty = {
+      ...existingPenalty,
+      status: 'cancelled',
+      cancelledAt: now,
+      cancelledById,
+      cancelledByName,
+      cancellationReason: trimmedReason,
+      updatedAt: now,
+    };
+
+    const newPenalties = currentPenalties.map((p) => (p.id === penaltyId ? updatedPenalty : p));
+    setLocalCollection(STORAGE_KEYS.penalties, newPenalties);
+
+    let updatedViolation: Violation | undefined;
+    if (existingPenalty.violationId) {
+      const currentViolations = getLocalCollection<Violation>(STORAGE_KEYS.violations, seed.INITIAL_VIOLATIONS);
+      const existingViolation = currentViolations.find((v) => v.id === existingPenalty.violationId);
+      if (existingViolation) {
+        updatedViolation = {
+          ...existingViolation,
+          status: 'cancelled',
+          cancelledAt: now,
+          cancelledById,
+          cancelledByName,
+          cancellationReason: trimmedReason,
+          updatedAt: now,
+        };
+        const newViolations = currentViolations.map((v) =>
+          v.id === existingPenalty.violationId ? updatedViolation! : v
+        );
+        setLocalCollection(STORAGE_KEYS.violations, newViolations);
+      }
+    }
+
+    return { penalty: updatedPenalty, violation: updatedViolation };
   },
 
 
@@ -756,7 +911,7 @@ export const DataService = {
       email: trimmedEmail,
       displayName: trimmedName,
       role: params.role,
-      phoneNumber: trimmedPhone,
+      ...(trimmedPhone ? { phoneNumber: trimmedPhone } : {}),
       isActive: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -764,7 +919,7 @@ export const DataService = {
 
     try {
       const userDocRef = doc(db, 'users', newUid);
-      await setDoc(userDocRef, newProfile);
+      await setDoc(userDocRef, sanitizeFirestorePayload(newProfile));
     } catch (firestoreError: any) {
       // Rollback: Hapus akun Auth sekunder jika gagal menulis profil Firestore
       try {

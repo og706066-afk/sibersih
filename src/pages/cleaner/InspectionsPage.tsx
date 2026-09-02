@@ -25,6 +25,7 @@ import { DataService } from '../../services/dataService';
 import { useAuth } from '../../contexts/AuthContext';
 import type {
   Area,
+  ClassRoom,
   Inspection,
   InspectionItem,
   ViolationType,
@@ -50,39 +51,46 @@ const DEFAULT_CHECKLIST_TEMPLATE: ChecklistFormItem[] = [
 // Helper: Menentukan jenis pelanggaran yang paling relevan berdasarkan item checklist yang gagal
 const getMatchingViolationType = (
   failedItems: ChecklistFormItem[],
-  types: ViolationType[]
+  types: ViolationType[],
+  rules?: PenaltyRule[]
 ): ViolationType | undefined => {
+  const matchedTypes: ViolationType[] = [];
+
   for (const item of failedItems) {
     const lower = item.name.toLowerCase();
+    let match: ViolationType | undefined;
     // 1. Sampah / Kolong Meja / Kursi -> vt-1 (Sampah Menumpuk Tidak Dibuang)
     if (lower.includes('sampah') || lower.includes('kolong') || lower.includes('kursi')) {
-      const match = types.find(
-        (t) => t.id === 'vt-1' || t.name.toLowerCase().includes('sampah')
-      );
-      if (match) return match;
+      match = types.find((t) => t.id === 'vt-1' || t.name.toLowerCase().includes('sampah'));
     }
     // 2. Coretan / Vandalisme -> vt-2 (Coretan Meja / Dinding)
-    if (lower.includes('coretan') || lower.includes('dinding')) {
-      const match = types.find(
-        (t) => t.id === 'vt-2' || t.name.toLowerCase().includes('coretan')
-      );
-      if (match) return match;
+    else if (lower.includes('coretan') || lower.includes('dinding')) {
+      match = types.find((t) => t.id === 'vt-2' || t.name.toLowerCase().includes('coretan'));
     }
     // 3. Papan Tulis -> vt-3 (Papan Tulis Belum Dihapus)
-    if (lower.includes('papan') || lower.includes('penghapus')) {
-      const match = types.find(
-        (t) => t.id === 'vt-3' || t.name.toLowerCase().includes('papan')
-      );
-      if (match) return match;
+    else if (lower.includes('papan') || lower.includes('penghapus')) {
+      match = types.find((t) => t.id === 'vt-3' || t.name.toLowerCase().includes('papan'));
     }
     // 4. Lantai -> vt-4 (Lantai Kotor / Noda Minuman)
-    if (lower.includes('lantai')) {
-      const match = types.find(
-        (t) => t.id === 'vt-4' || t.name.toLowerCase().includes('lantai')
-      );
-      if (match) return match;
+    else if (lower.includes('lantai')) {
+      match = types.find((t) => t.id === 'vt-4' || t.name.toLowerCase().includes('lantai'));
+    }
+
+    if (match && !matchedTypes.some((m) => m.id === match.id)) {
+      matchedTypes.push(match);
     }
   }
+
+  // Prioritaskan jenis pelanggaran yang memiliki aturan denda aktif
+  if (rules && rules.length > 0) {
+    const typeWithActiveRule = matchedTypes.find((t) =>
+      rules.some((r) => r.isActive && r.violationTypeId === t.id)
+    );
+    if (typeWithActiveRule) return typeWithActiveRule;
+  }
+
+  if (matchedTypes.length > 0) return matchedTypes[0];
+
   // Fallback ke tipe aktif pertama atau tipe pertama di koleksi
   return types.find((t) => t.isActive) || types[0];
 };
@@ -91,12 +99,14 @@ export const InspectionsPage: React.FC = () => {
   const { currentUser } = useAuth();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
+  const [classes, setClasses] = useState<ClassRoom[]>([]);
   const [violationTypes, setViolationTypes] = useState<ViolationType[]>([]);
   const [penaltyRules, setPenaltyRules] = useState<PenaltyRule[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState<{
     type: 'success' | 'warning' | 'error';
     text: string;
   } | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modal States
@@ -114,17 +124,19 @@ export const InspectionsPage: React.FC = () => {
 
   const loadData = async () => {
     try {
-      const [insp, ar, vt, pr] = await Promise.all([
+      const [insp, ar, vt, pr, cls] = await Promise.all([
         DataService.getInspections(),
         DataService.getAreas(),
         DataService.getViolationTypes(),
         DataService.getPenaltyRules(),
+        DataService.getClasses(),
       ]);
       const activeAreas = ar.filter((a) => a.isActive);
       setInspections(insp);
       setAreas(ar);
       setViolationTypes(vt);
       setPenaltyRules(pr);
+      setClasses(cls);
       if (activeAreas.length > 0 && !selectedAreaId) {
         setSelectedAreaId(activeAreas[0].id);
       }
@@ -180,18 +192,39 @@ export const InspectionsPage: React.FC = () => {
     if (!selectedAreaId || isSubmitting) return;
 
     if (!currentUser) {
+      const authError = 'Sesi login tidak valid. Silakan login kembali.';
+      setModalError(authError);
       setFeedbackMessage({
         type: 'error',
-        text: 'Sesi login tidak valid. Silakan login kembali.',
+        text: authError,
       });
       return;
     }
 
     setIsSubmitting(true);
+    setModalError(null);
     setFeedbackMessage(null);
 
     try {
       const area = areas.find((a) => a.id === selectedAreaId);
+
+      // Cek dan evaluasi classId secara transparan tanpa membuat classId palsu
+      let effectiveClassId = area?.classId;
+      if (!effectiveClassId && area && area.category === 'class') {
+        // Jika area adalah ruang kelas namun classId belum diset, cari hubungan legitimate via master classes
+        const matchedClass = classes.find((c) => {
+          const cName = c.name.trim().toLowerCase();
+          const aName = area.name.trim().toLowerCase();
+          return aName === cName || aName.includes(cName);
+        });
+        if (matchedClass) {
+          effectiveClassId = matchedClass.id;
+          console.log(
+            `[DEBUG InspectionsPage] Resolved classId '${matchedClass.id}' (${matchedClass.name}) from classes collection matching area '${area.name}'`
+          );
+        }
+      }
+
       const totalScore = Math.round(
         checklistItems.reduce((acc, curr) => acc + curr.score, 0) / checklistItems.length
       );
@@ -203,35 +236,52 @@ export const InspectionsPage: React.FC = () => {
       else if (totalScore < 75) overallGrade = 'dirty';
       else if (totalScore < 85) overallGrade = 'moderate';
 
+      const inspectionPayload = {
+        areaId: selectedAreaId,
+        areaName: area ? area.name : 'Area',
+        ...(effectiveClassId ? { classId: effectiveClassId } : {}),
+        inspectorId: currentUser.uid,
+        inspectorName: currentUser.displayName || 'Petugas Kebersihan',
+        date: inspectionDate,
+        status: 'completed' as const,
+        overallGrade,
+        totalScore,
+        notes: overallNotes,
+        hasViolations,
+        completedAt: new Date().toISOString(),
+      };
+
+      const inspectionItemsPayload = checklistItems.map((item) => ({
+        itemName: item.name,
+        passed: item.passed,
+        score: item.score,
+        notes: item.notes,
+      }));
+
+      // ============================================================
+      // DEBUG WAJIB: Log nilai sebelum DataService.createInspection()
+      // ============================================================
+      console.log('=== [SIBERSIH DEBUG PRE-INSPECTION CREATE] ===');
+      console.log('1. selectedAreaId:', selectedAreaId);
+      console.log('2. area object:', area);
+      console.log('3. area.classId (raw):', area?.classId, '| effectiveClassId:', effectiveClassId);
+      console.log('4. currentUser.uid:', currentUser.uid);
+      console.log('5. currentUser.role:', currentUser.role);
+      console.log('6. inspection payload:', inspectionPayload);
+      console.log('7. inspection items payload:', inspectionItemsPayload);
+      console.log('=============================================');
+
       const newInspection = await DataService.createInspection(
-        {
-          areaId: selectedAreaId,
-          areaName: area ? area.name : 'Area',
-          classId: area?.classId,
-          inspectorId: currentUser.uid,
-          inspectorName: currentUser.displayName || 'Petugas Kebersihan',
-          date: inspectionDate,
-          status: 'completed',
-          overallGrade,
-          totalScore,
-          notes: overallNotes,
-          hasViolations,
-          completedAt: new Date().toISOString(),
-        },
-        checklistItems.map((item) => ({
-          itemName: item.name,
-          passed: item.passed,
-          score: item.score,
-          notes: item.notes,
-        }))
+        inspectionPayload,
+        inspectionItemsPayload
       );
 
       // Jika ada item checklist yang tidak lolos, catat pelanggaran dan cari aturan denda yang berlaku
       if (hasViolations && area) {
         const failedItems = checklistItems.filter((i) => !i.passed);
 
-        // Tentukan violation type berdasarkan item yang gagal
-        const matchedType = getMatchingViolationType(failedItems, violationTypes);
+        // Tentukan violation type berdasarkan item yang gagal dengan mempertimbangkan penaltyRules aktif
+        const matchedType = getMatchingViolationType(failedItems, violationTypes, penaltyRules);
         const violationTypeId = matchedType?.id || 'vt-1';
         const violationTypeName = matchedType?.name || 'Ketidaksesuaian Standar Kebersihan';
         const severity: ViolationSeverity = totalScore < 60 ? 'high' : 'medium';
@@ -247,9 +297,9 @@ export const InspectionsPage: React.FC = () => {
         if (matchingRule) {
           penaltyCreated = true;
           penaltyPayload = {
-            classId: area.classId,
+            ...(effectiveClassId ? { classId: effectiveClassId } : {}),
             className: area.name,
-            responsiblePerson: area.classId ? `Ketua Piket ${area.name}` : `Penanggung Jawab ${area.name}`,
+            responsiblePerson: effectiveClassId ? `Ketua Piket ${area.name}` : `Penanggung Jawab ${area.name}`,
             amount: matchingRule.fineAmount,
             reason: `${violationTypeName}: ${failedItems.map((f) => f.name).join(', ')}`,
             status: 'pending' as const,
@@ -260,12 +310,19 @@ export const InspectionsPage: React.FC = () => {
           };
         }
 
+        console.log('[DEBUG InspectionsPage] Pre-createViolationWithPenalty:', {
+          violationTypeId,
+          violationTypeName,
+          matchingRuleFound: !!matchingRule,
+          penaltyPayload,
+        });
+
         await DataService.createViolationWithPenalty(
           {
             inspectionId: newInspection.id,
             areaId: area.id,
             areaName: area.name,
-            classId: area.classId,
+            ...(effectiveClassId ? { classId: effectiveClassId } : {}),
             className: area.name,
             violationTypeId,
             violationTypeName,
@@ -299,15 +356,18 @@ export const InspectionsPage: React.FC = () => {
       }
 
       setIsCreateModalOpen(false);
+      setModalError(null);
       // Reset form
       setChecklistItems(DEFAULT_CHECKLIST_TEMPLATE);
       setOverallNotes('');
       await loadData();
     } catch (err: any) {
       console.error('Failed to create inspection', err);
+      const errorMsg = err?.message || 'Gagal menyimpan hasil pemeriksaan.';
+      setModalError(errorMsg);
       setFeedbackMessage({
         type: 'error',
-        text: err?.message || 'Gagal menyimpan hasil pemeriksaan.',
+        text: errorMsg,
       });
     } finally {
       setIsSubmitting(false);
@@ -330,7 +390,10 @@ export const InspectionsPage: React.FC = () => {
           size="sm"
           variant="primary"
           leftIcon={<Plus className="w-4 h-4" />}
-          onClick={() => setIsCreateModalOpen(true)}
+          onClick={() => {
+            setModalError(null);
+            setIsCreateModalOpen(true);
+          }}
         >
           Periksa Baru
         </Button>
@@ -524,6 +587,16 @@ export const InspectionsPage: React.FC = () => {
             value={overallNotes}
             onChange={(e) => setOverallNotes(e.target.value)}
           />
+
+          {modalError && (
+            <div className="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs border border-rose-200 flex items-start gap-2 animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">Penyimpanan Gagal</p>
+                <p className="text-[11px] mt-0.5">{modalError}</p>
+              </div>
+            </div>
+          )}
 
           <div className="pt-2 flex items-center justify-end gap-2">
             <Button

@@ -33,6 +33,7 @@ export const AppShell: React.FC = () => {
     if (path.startsWith('/admin')) {
       if (path.includes('/users')) return { title: 'Manajemen Pengguna', subtitle: 'Pengaturan akun & peran' };
       if (path.includes('/areas')) return { title: 'Area & Kelas', subtitle: 'Master data lokasi pesantren' };
+      if (path.includes('/penalties')) return { title: 'Monitoring Denda & Kas', subtitle: 'Pencatatan & rekapitulasi kas denda' };
       if (path.includes('/violations')) return { title: 'Aturan & Pelanggaran', subtitle: 'Konfigurasi jenis denda' };
       if (path.includes('/settings')) return { title: 'Pengaturan Sistem', subtitle: 'Konfigurasi Firebase & database' };
       return { title: 'SIBERSIH Admin', subtitle: 'Panel Kontrol & Manajemen' };

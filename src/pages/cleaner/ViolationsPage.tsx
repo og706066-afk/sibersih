@@ -6,6 +6,7 @@ import {
   MapPin,
   Camera,
   Receipt,
+  Ban,
 } from 'lucide-react';
 
 import {
@@ -202,12 +203,32 @@ export const ViolationsPage: React.FC = () => {
                     {viol.violationTypeName}
                   </p>
                 </div>
-                <div className="shrink-0 ml-2">{getSeverityBadge(viol.severity)}</div>
+                <div className="shrink-0 ml-2 flex items-center gap-1">
+                  {viol.status === 'cancelled' && (
+                    <Badge variant="neutral" size="sm">
+                      Dibatalkan
+                    </Badge>
+                  )}
+                  {getSeverityBadge(viol.severity)}
+                </div>
               </div>
 
               <p className="text-xs text-slate-600 mt-2 bg-slate-50 p-2 rounded-lg border border-slate-100 line-clamp-2">
                 {viol.description}
               </p>
+
+              {/* Cancellation info banner if cancelled */}
+              {viol.status === 'cancelled' && (
+                <div className="text-xs bg-rose-50/70 p-2 rounded-lg border border-rose-200/80 mt-2 space-y-0.5">
+                  <div className="flex items-center gap-1 font-semibold text-rose-800 text-[11px]">
+                    <Ban className="w-3 h-3 text-rose-600" />
+                    <span>Pelanggaran Dibatalkan</span>
+                  </div>
+                  <p className="text-[11px] text-rose-700">
+                    Alasan: {viol.cancellationReason || 'Tanpa keterangan'}
+                  </p>
+                </div>
+              )}
 
               {/* Photo preview if present */}
               {viol.photoUrls && viol.photoUrls.length > 0 && (
@@ -221,7 +242,11 @@ export const ViolationsPage: React.FC = () => {
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3 h-3" /> {viol.date}
                 </span>
-                {viol.penaltyCreated ? (
+                {viol.status === 'cancelled' ? (
+                  <span className="flex items-center gap-1 font-semibold text-slate-500">
+                    <Ban className="w-3 h-3" /> Dibatalkan
+                  </span>
+                ) : viol.penaltyCreated ? (
                   <span className="flex items-center gap-1 font-semibold text-amber-600">
                     <Receipt className="w-3 h-3" /> Denda Diterbitkan
                   </span>
@@ -356,7 +381,14 @@ export const ViolationsPage: React.FC = () => {
               <span className="text-xs text-slate-500 font-medium">Pelapor:</span>
               <p className="text-xs font-bold text-slate-800">{selectedViolation?.reportedByName}</p>
             </div>
-            {selectedViolation && getSeverityBadge(selectedViolation.severity)}
+            <div className="flex items-center gap-1">
+              {selectedViolation?.status === 'cancelled' && (
+                <Badge variant="neutral" size="sm">
+                  Dibatalkan
+                </Badge>
+              )}
+              {selectedViolation && getSeverityBadge(selectedViolation.severity)}
+            </div>
           </div>
 
           <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
@@ -377,14 +409,39 @@ export const ViolationsPage: React.FC = () => {
             </div>
           )}
 
-          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between">
-            <span className="text-xs text-emerald-800 font-medium">Status Tindak Lanjut:</span>
-            {selectedViolation?.penaltyCreated ? (
-              <Badge variant="warning" size="sm">Denda Aktif</Badge>
-            ) : (
-              <Badge variant="neutral" size="sm">Peringatan</Badge>
-            )}
-          </div>
+          {selectedViolation?.status === 'cancelled' ? (
+            <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-rose-800 font-semibold flex items-center gap-1">
+                  <Ban className="w-3.5 h-3.5 text-rose-600" /> Status Pelanggaran:
+                </span>
+                <Badge variant="neutral" size="sm">
+                  Dibatalkan
+                </Badge>
+              </div>
+              <p className="text-xs text-rose-700">
+                <strong>Alasan:</strong> {selectedViolation.cancellationReason || 'Tanpa keterangan'}
+              </p>
+              {selectedViolation.cancelledByName && (
+                <p className="text-[11px] text-rose-600">
+                  Dibatalkan oleh: {selectedViolation.cancelledByName} • {selectedViolation.cancelledAt ? new Date(selectedViolation.cancelledAt).toLocaleDateString('id-ID') : '-'}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between">
+              <span className="text-xs text-emerald-800 font-medium">Status Tindak Lanjut:</span>
+              {selectedViolation?.penaltyCreated ? (
+                <Badge variant="warning" size="sm">
+                  Denda Aktif
+                </Badge>
+              ) : (
+                <Badge variant="neutral" size="sm">
+                  Peringatan
+                </Badge>
+              )}
+            </div>
+          )}
         </div>
       </Modal>
     </div>

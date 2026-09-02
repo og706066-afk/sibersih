@@ -98,8 +98,10 @@ export const CleanerDashboard: React.FC = () => {
             </div>
           </div>
           <div className="mt-2">
-            <span className="text-2xl font-bold text-rose-600">{violations.length}</span>
-            <span className="text-xs text-slate-400 ml-1">tercatat</span>
+            <span className="text-2xl font-bold text-rose-600">
+              {violations.filter((v) => v.status !== 'cancelled').length}
+            </span>
+            <span className="text-xs text-slate-400 ml-1">aktif</span>
           </div>
         </Card>
 

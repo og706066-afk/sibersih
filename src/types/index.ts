@@ -146,6 +146,8 @@ export interface PenaltyRule {
   createdAt: string;
 }
 
+export type ViolationStatus = 'reported' | 'cancelled';
+
 export interface Violation {
   id: string;
   inspectionId?: string;
@@ -162,11 +164,16 @@ export interface Violation {
   date: string; // YYYY-MM-DD
   photoUrls: string[];
   penaltyCreated: boolean;
+  status?: ViolationStatus;
+  cancelledAt?: string;
+  cancelledById?: string;
+  cancelledByName?: string;
+  cancellationReason?: string;
   createdAt: string;
   updatedAt: string;
 }
 
-export type PenaltyStatus = 'pending' | 'paid' | 'waived';
+export type PenaltyStatus = 'pending' | 'paid' | 'waived' | 'cancelled';
 
 export interface Penalty {
   id: string;
@@ -184,6 +191,10 @@ export interface Penalty {
   paidReceivedById?: string;
   receiptNumber?: string;
   notes?: string;
+  cancelledAt?: string;
+  cancelledById?: string;
+  cancelledByName?: string;
+  cancellationReason?: string;
   createdAt: string;
   updatedAt: string;
 }

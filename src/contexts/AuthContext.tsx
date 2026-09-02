@@ -42,7 +42,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const userSnap = await getDoc(userDocRef);
           if (userSnap.exists()) {
             const profile = userSnap.data() as UserProfile;
-            // FIX 2: Deny inactive users during session restoration
+            // Tolak user yang dinonaktifkan oleh Administrator
             if (profile.isActive !== true) {
               if (auth) await firebaseSignOut(auth);
               setCurrentUser(null);
@@ -53,21 +53,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
             setCurrentUser(profile);
           } else {
-            // Profile fallback
-            const defaultProfile: UserProfile = {
-              uid: user.uid,
-              email: user.email || '',
-              displayName: user.displayName || 'Pengguna SIBERSIH',
-              role: 'cleaner',
-              isActive: true,
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-            };
-            await setDoc(userDocRef, defaultProfile);
-            setCurrentUser(defaultProfile);
+            // Pengguna Auth ada tetapi profil Firestore tidak ditemukan (belum diprovision Admin)
+            console.warn('[SIBERSIH Auth] Dokumen /users/{uid} tidak ditemukan di Firestore. Akses ditolak.');
+            if (auth) await firebaseSignOut(auth);
+            setCurrentUser(null);
+            setFirebaseUser(null);
           }
         } catch (error) {
           console.error('Failed to load user profile from Firestore:', error);
+          if (auth) await firebaseSignOut(auth);
+          setCurrentUser(null);
+          setFirebaseUser(null);
         }
       } else {
         // Not authenticated
@@ -104,28 +100,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userSnap = await getDoc(userDocRef);
     if (userSnap.exists()) {
       const profile = userSnap.data() as UserProfile;
-      // FIX 2: Deny inactive user login and sign out immediately
+      // Tolak user jika isActive !== true
       if (profile.isActive !== true) {
         await firebaseSignOut(auth);
         setCurrentUser(null);
         setFirebaseUser(null);
-        throw new Error('Akun Anda dinonaktifkan. Hubungi Administrator.');
+        throw new Error('Akun Anda sedang dinonaktifkan oleh Administrator.');
       }
       setCurrentUser(profile);
       return profile;
     }
 
-    const fallbackProfile: UserProfile = {
-      uid: userCredential.user.uid,
-      email: userCredential.user.email || '',
-      displayName: userCredential.user.displayName || 'Pengguna SIBERSIH',
-      role: 'cleaner',
-      isActive: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setCurrentUser(fallbackProfile);
-    return fallbackProfile;
+    // Dokumen /users/{uid} TIDAK ditemukan di Firestore:
+    // Tolak akses, sign-out dari Firebase Auth, dan jangan pernah auto-create role
+    await firebaseSignOut(auth);
+    setCurrentUser(null);
+    setFirebaseUser(null);
+    throw new Error('Akun Anda belum terdaftar atau belum diaktivasi oleh Administrator. Silakan hubungi Admin SIBERSIH.');
   };
 
   const register = async (

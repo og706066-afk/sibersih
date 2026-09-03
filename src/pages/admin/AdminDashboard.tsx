@@ -5,6 +5,7 @@ import {
   Building2,
   AlertTriangle,
   Receipt,
+  FileText,
   Database,
   Cloud,
   CloudOff,
@@ -249,6 +250,25 @@ export const AdminDashboard: React.FC = () => {
         </h3>
 
         <div className="space-y-2">
+          <Card
+            hoverEffect
+            onClick={() => navigate('/admin/reports')}
+            className="p-3 bg-white flex items-center justify-between"
+          >
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center">
+                <FileText className="w-4 h-4" />
+              </div>
+              <div>
+                <h4 className="text-xs font-bold text-slate-900">Laporan & Rekapitulasi</h4>
+                <p className="text-[11px] text-slate-500">
+                  Analisis rekap pemeriksaan, temuan pelanggaran, dan kas denda
+                </p>
+              </div>
+            </div>
+            <ArrowRight className="w-4 h-4 text-slate-400" />
+          </Card>
+
           <Card
             hoverEffect
             onClick={() => navigate('/admin/penalties')}

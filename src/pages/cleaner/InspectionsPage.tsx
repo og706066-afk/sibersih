@@ -8,6 +8,8 @@ import {
   MapPin,
   AlertTriangle,
   AlertCircle,
+  Pencil,
+  Trash2,
 } from 'lucide-react';
 
 import {
@@ -28,24 +30,49 @@ import type {
   ClassRoom,
   Inspection,
   InspectionItem,
+  Violation,
+  Penalty,
   ViolationType,
   PenaltyRule,
   ViolationSeverity,
+  CleanlinessGrade,
 } from '../../types';
 
 interface ChecklistFormItem {
+  id?: string;
   name: string;
   passed: boolean;
   score: number;
   notes: string;
 }
 
+// ============================================================
+// STANDAR SISTEM SKORING SIBERSIH
+// Lolos = 100 | Gagal = 40
+// Threshold: >=85 Bersih, 75-84 Cukup, 60-74 Kotor, <60 Kritis
+// ============================================================
+export const CHECKLIST_PASS_SCORE = 100;
+export const CHECKLIST_FAIL_SCORE = 40;
+
+export const calculateInspectionScore = (items: Array<{ score: number }>): number => {
+  if (!items || items.length === 0) return 0;
+  const total = items.reduce((acc, curr) => acc + curr.score, 0);
+  return Math.round(total / items.length);
+};
+
+export const getCleanlinessGrade = (score: number): CleanlinessGrade => {
+  if (score >= 85) return 'clean';
+  if (score >= 75) return 'moderate';
+  if (score >= 60) return 'dirty';
+  return 'critical';
+};
+
 const DEFAULT_CHECKLIST_TEMPLATE: ChecklistFormItem[] = [
-  { name: 'Kebersihan Lantai & Sudut Ruang', passed: true, score: 90, notes: '' },
-  { name: 'Kerapian Meja & Kolong Kursi', passed: true, score: 90, notes: '' },
-  { name: 'Papan Tulis & Penghapus Bersih', passed: true, score: 90, notes: '' },
-  { name: 'Tempat Sampah Kosong & Berplastik', passed: true, score: 90, notes: '' },
-  { name: 'Jendela, Pintu & Ventilasi Udara', passed: true, score: 90, notes: '' },
+  { name: 'Kebersihan Lantai & Sudut Ruang', passed: true, score: CHECKLIST_PASS_SCORE, notes: '' },
+  { name: 'Kerapian Meja & Kolong Kursi', passed: true, score: CHECKLIST_PASS_SCORE, notes: '' },
+  { name: 'Papan Tulis & Penghapus Bersih', passed: true, score: CHECKLIST_PASS_SCORE, notes: '' },
+  { name: 'Tempat Sampah Kosong & Berplastik', passed: true, score: CHECKLIST_PASS_SCORE, notes: '' },
+  { name: 'Jendela, Pintu & Ventilasi Udara', passed: true, score: CHECKLIST_PASS_SCORE, notes: '' },
 ];
 
 // Helper: Menentukan jenis pelanggaran yang paling relevan berdasarkan item checklist yang gagal
@@ -100,6 +127,8 @@ export const InspectionsPage: React.FC = () => {
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
+  const [violations, setViolations] = useState<Violation[]>([]);
+  const [penalties, setPenalties] = useState<Penalty[]>([]);
   const [violationTypes, setViolationTypes] = useState<ViolationType[]>([]);
   const [penaltyRules, setPenaltyRules] = useState<PenaltyRule[]>([]);
   const [feedbackMessage, setFeedbackMessage] = useState<{
@@ -122,14 +151,30 @@ export const InspectionsPage: React.FC = () => {
   const [checklistItems, setChecklistItems] = useState<ChecklistFormItem[]>(DEFAULT_CHECKLIST_TEMPLATE);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Form States for Edit Inspection
+  const [editingInspection, setEditingInspection] = useState<Inspection | null>(null);
+  const [editAreaId, setEditAreaId] = useState('');
+  const [editInspectionDate, setEditInspectionDate] = useState('');
+  const [editOverallNotes, setEditOverallNotes] = useState('');
+  const [editChecklistItems, setEditChecklistItems] = useState<ChecklistFormItem[]>([]);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editModalError, setEditModalError] = useState<string | null>(null);
+
+  // Form States for Delete Inspection
+  const [deletingInspection, setDeletingInspection] = useState<Inspection | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteModalError, setDeleteModalError] = useState<string | null>(null);
+
   const loadData = async () => {
     try {
-      const [insp, ar, vt, pr, cls] = await Promise.all([
+      const [insp, ar, vt, pr, cls, viols, pens] = await Promise.all([
         DataService.getInspections(),
         DataService.getAreas(),
         DataService.getViolationTypes(),
         DataService.getPenaltyRules(),
         DataService.getClasses(),
+        DataService.getViolations(),
+        DataService.getPenalties(),
       ]);
       const activeAreas = ar.filter((a) => a.isActive);
       setInspections(insp);
@@ -137,10 +182,11 @@ export const InspectionsPage: React.FC = () => {
       setViolationTypes(vt);
       setPenaltyRules(pr);
       setClasses(cls);
+      setViolations(viols);
+      setPenalties(pens);
       if (activeAreas.length > 0 && !selectedAreaId) {
         setSelectedAreaId(activeAreas[0].id);
       }
-
     } catch (err) {
       console.error('Failed to load inspections data', err);
     } finally {
@@ -165,6 +211,163 @@ export const InspectionsPage: React.FC = () => {
     }
   };
 
+  const handleOpenEditModal = async (insp: Inspection, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingInspection(insp);
+    setEditAreaId(insp.areaId);
+    setEditInspectionDate(insp.date);
+    setEditOverallNotes(insp.notes || '');
+    setEditModalError(null);
+    setIsUpdating(false);
+
+    try {
+      const items = await DataService.getInspectionItems(insp.id);
+      if (items.length > 0) {
+        setEditChecklistItems(
+          items.map((it) => ({
+            id: it.id,
+            name: it.itemName,
+            passed: it.passed,
+            score: it.score ?? (it.passed ? CHECKLIST_PASS_SCORE : CHECKLIST_FAIL_SCORE),
+            notes: it.notes || '',
+          }))
+        );
+      } else {
+        setEditChecklistItems(DEFAULT_CHECKLIST_TEMPLATE);
+      }
+    } catch (err) {
+      console.error('Failed to load inspection items for edit', err);
+      setEditChecklistItems(DEFAULT_CHECKLIST_TEMPLATE);
+    }
+  };
+
+  const handleToggleEditChecklistItem = (index: number) => {
+    setEditChecklistItems((prev) =>
+      prev.map((item, idx) => {
+        if (idx === index) {
+          const newPassed = !item.passed;
+          return {
+            ...item,
+            passed: newPassed,
+            score: newPassed ? CHECKLIST_PASS_SCORE : CHECKLIST_FAIL_SCORE,
+          };
+        }
+        return item;
+      })
+    );
+  };
+
+  const handleEditItemNoteChange = (index: number, notes: string) => {
+    setEditChecklistItems((prev) =>
+      prev.map((item, idx) => (idx === index ? { ...item, notes } : item))
+    );
+  };
+
+  const handleUpdateInspection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingInspection || !editAreaId || isUpdating) return;
+
+    setIsUpdating(true);
+    setEditModalError(null);
+    setFeedbackMessage(null);
+
+    try {
+      const area = areas.find((a) => a.id === editAreaId);
+      let effectiveClassId = area?.classId;
+      if (!effectiveClassId && area && area.category === 'class') {
+        const matchedClass = classes.find((c) => {
+          const cName = c.name.trim().toLowerCase();
+          const aName = area.name.trim().toLowerCase();
+          return aName === cName || aName.includes(cName);
+        });
+        if (matchedClass) {
+          effectiveClassId = matchedClass.id;
+        }
+      }
+
+      const totalScore = calculateInspectionScore(editChecklistItems);
+      const hasViolations = editChecklistItems.some((i) => !i.passed);
+      const overallGrade = getCleanlinessGrade(totalScore);
+
+      const inspectionUpdates = {
+        areaId: editAreaId,
+        areaName: area ? area.name : editingInspection.areaName,
+        ...(effectiveClassId ? { classId: effectiveClassId } : {}),
+        date: editInspectionDate,
+        status: 'completed' as const,
+        overallGrade,
+        totalScore,
+        notes: editOverallNotes,
+        hasViolations,
+      };
+
+      const itemsPayload = editChecklistItems.map((item) => ({
+        id: item.id,
+        itemName: item.name,
+        passed: item.passed,
+        score: item.score,
+        notes: item.notes,
+      }));
+
+      await DataService.updateInspection(
+        editingInspection.id,
+        inspectionUpdates,
+        itemsPayload
+      );
+
+      setFeedbackMessage({
+        type: 'success',
+        text: `Data pemeriksaan ${area?.name || editingInspection.areaName} berhasil diperbarui (Skor: ${totalScore}%).`,
+      });
+      setEditingInspection(null);
+      await loadData();
+    } catch (err: any) {
+      console.error('Failed to update inspection', err);
+      const errorMsg = err?.message || 'Gagal menyimpan perubahan pemeriksaan.';
+      setEditModalError(errorMsg);
+      setFeedbackMessage({
+        type: 'error',
+        text: errorMsg,
+      });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleOpenDeleteModal = (insp: Inspection, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setDeletingInspection(insp);
+    setDeleteModalError(null);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deletingInspection || isDeleting) return;
+
+    setIsDeleting(true);
+    setDeleteModalError(null);
+    setFeedbackMessage(null);
+
+    try {
+      await DataService.deleteInspection(deletingInspection.id);
+      setFeedbackMessage({
+        type: 'success',
+        text: `Pemeriksaan ${deletingInspection.areaName} tanggal ${deletingInspection.date} berhasil dihapus.`,
+      });
+      setDeletingInspection(null);
+      await loadData();
+    } catch (err: any) {
+      console.error('Failed to delete inspection', err);
+      const errorMsg = err?.message || 'Gagal menghapus data pemeriksaan.';
+      setDeleteModalError(errorMsg);
+      setFeedbackMessage({
+        type: 'error',
+        text: errorMsg,
+      });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   const handleToggleChecklistItem = (index: number) => {
     setChecklistItems((prev) =>
       prev.map((item, idx) => {
@@ -173,7 +376,7 @@ export const InspectionsPage: React.FC = () => {
           return {
             ...item,
             passed: newPassed,
-            score: newPassed ? 90 : 40,
+            score: newPassed ? CHECKLIST_PASS_SCORE : CHECKLIST_FAIL_SCORE,
           };
         }
         return item;
@@ -225,16 +428,9 @@ export const InspectionsPage: React.FC = () => {
         }
       }
 
-      const totalScore = Math.round(
-        checklistItems.reduce((acc, curr) => acc + curr.score, 0) / checklistItems.length
-      );
-
+      const totalScore = calculateInspectionScore(checklistItems);
       const hasViolations = checklistItems.some((i) => !i.passed);
-
-      let overallGrade: Inspection['overallGrade'] = 'clean';
-      if (totalScore < 60) overallGrade = 'critical';
-      else if (totalScore < 75) overallGrade = 'dirty';
-      else if (totalScore < 85) overallGrade = 'moderate';
+      const overallGrade = getCleanlinessGrade(totalScore);
 
       const inspectionPayload = {
         areaId: selectedAreaId,
@@ -493,11 +689,38 @@ export const InspectionsPage: React.FC = () => {
                 </p>
               )}
 
-              {insp.hasViolations && (
-                <div className="mt-2 flex items-center gap-1 text-[11px] font-semibold text-rose-600 bg-rose-50 px-2 py-1 rounded-md border border-rose-100 w-fit">
-                  <AlertTriangle className="w-3 h-3" /> Ada temuan pelanggaran
-                </div>
-              )}
+              <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-slate-100">
+                {insp.hasViolations ? (
+                  <div className="flex items-center gap-1 text-[11px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+                    <AlertTriangle className="w-3 h-3" /> Ada temuan pelanggaran
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-400">Pemeriksaan selesai</div>
+                )}
+
+                {currentUser?.role === 'cleaner' && (
+                  <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenEditModal(insp, e)}
+                      className="px-2 py-1 rounded-lg text-xs font-medium text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Edit Pemeriksaan"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Edit</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => handleOpenDeleteModal(insp, e)}
+                      className="px-2 py-1 rounded-lg text-xs font-medium text-slate-400 hover:text-rose-600 hover:bg-rose-50 flex items-center gap-1 transition-colors cursor-pointer"
+                      title="Hapus Pemeriksaan"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Hapus</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             </Card>
           ))}
         </div>
@@ -520,7 +743,6 @@ export const InspectionsPage: React.FC = () => {
               options={areas
                 .filter((a) => a.isActive)
                 .map((a) => ({ value: a.id, label: `${a.name} (${a.building})` }))}
-
               required
             />
             <Input
@@ -552,7 +774,7 @@ export const InspectionsPage: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => handleToggleChecklistItem(idx)}
-                      className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg transition-colors ${
+                      className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
                         item.passed
                           ? 'bg-emerald-600 text-white'
                           : 'bg-rose-600 text-white'
@@ -612,6 +834,232 @@ export const InspectionsPage: React.FC = () => {
             </Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal: Edit Pemeriksaan */}
+      <Modal
+        isOpen={Boolean(editingInspection)}
+        onClose={() => setEditingInspection(null)}
+        title="Edit Pemeriksaan Kebersihan"
+        description={`Koreksi hasil checklist untuk ${editingInspection?.areaName || 'Lokasi'}`}
+        size="lg"
+      >
+        {editingInspection && (
+          <form onSubmit={handleUpdateInspection} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Select
+                label="Pilih Area / Lokasi"
+                value={editAreaId}
+                onChange={(e) => setEditAreaId(e.target.value)}
+                options={areas
+                  .filter((a) => a.isActive)
+                  .map((a) => ({ value: a.id, label: `${a.name} (${a.building})` }))}
+                required
+              />
+              <Input
+                type="date"
+                label="Tanggal Pemeriksaan"
+                value={editInspectionDate}
+                onChange={(e) => setEditInspectionDate(e.target.value)}
+                required
+              />
+            </div>
+
+            {/* Live Score Preview in Edit Modal */}
+            {(() => {
+              const liveScore =
+                editChecklistItems.length > 0
+                  ? calculateInspectionScore(editChecklistItems)
+                  : editingInspection.totalScore ?? 0;
+              const liveGrade = getCleanlinessGrade(liveScore);
+
+              return (
+                <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-xs text-slate-500 font-medium">Perhitungan Skor Baru</span>
+                    <div className="text-lg font-bold text-slate-900 mt-0.5">
+                      {liveScore}%
+                    </div>
+                  </div>
+                  <Badge
+                    variant={
+                      liveGrade === 'clean'
+                        ? 'success'
+                        : liveGrade === 'moderate'
+                        ? 'warning'
+                        : 'danger'
+                    }
+                    size="md"
+                  >
+                    {liveGrade === 'clean'
+                      ? 'Bersih'
+                      : liveGrade === 'moderate'
+                      ? 'Cukup'
+                      : 'Kotor'}
+                  </Badge>
+                </div>
+              );
+            })()}
+
+            {/* Edit Checklist Items */}
+            <div className="space-y-2 pt-2 border-t border-slate-100">
+              <label className="block text-xs font-bold uppercase tracking-wider text-slate-600">
+                Koreksi Checklist Penilaian
+              </label>
+              <div className="space-y-2">
+                {editChecklistItems.map((item, idx) => (
+                  <div
+                    key={idx}
+                    className={`p-3 rounded-xl border transition-all ${
+                      item.passed
+                        ? 'bg-emerald-50/50 border-emerald-200'
+                        : 'bg-rose-50/50 border-rose-200'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-800">{item.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleEditChecklistItem(idx)}
+                        className={`flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-lg transition-colors cursor-pointer ${
+                          item.passed
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-rose-600 text-white'
+                        }`}
+                      >
+                        {item.passed ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Lolos
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="w-3.5 h-3.5" /> Tidak Lolos
+                          </>
+                        )}
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      placeholder="Catatan tambahan kriteria ini (opsional)..."
+                      value={item.notes}
+                      onChange={(e) => handleEditItemNoteChange(idx, e.target.value)}
+                      className="w-full mt-2 text-xs p-1.5 bg-white/80 border border-slate-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <Textarea
+              label="Catatan Keseluruhan Inspeksi"
+              placeholder="Tuliskan catatan perbaikan..."
+              value={editOverallNotes}
+              onChange={(e) => setEditOverallNotes(e.target.value)}
+            />
+
+            {editModalError && (
+              <div className="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs border border-rose-200 flex items-start gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Update Gagal</p>
+                  <p className="text-[11px] mt-0.5">{editModalError}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingInspection(null)}
+                disabled={isUpdating}
+              >
+                Batal
+              </Button>
+              <Button type="submit" variant="primary" isLoading={isUpdating} disabled={isUpdating}>
+                Simpan Perubahan
+              </Button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Modal: Konfirmasi Hapus Pemeriksaan */}
+      <Modal
+        isOpen={Boolean(deletingInspection)}
+        onClose={() => setDeletingInspection(null)}
+        title="Konfirmasi Hapus Pemeriksaan"
+        description="Pemeriksaan yang dihapus tidak dapat dikembalikan lagi."
+        size="md"
+      >
+        {deletingInspection && (
+          <div className="space-y-4">
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2 text-xs">
+              <div className="flex justify-between border-b border-slate-200/60 pb-1.5">
+                <span className="text-slate-500">Area / Lokasi:</span>
+                <span className="font-bold text-slate-800">{deletingInspection.areaName}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200/60 pb-1.5">
+                <span className="text-slate-500">Tanggal:</span>
+                <span className="font-medium text-slate-700">{deletingInspection.date}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200/60 pb-1.5">
+                <span className="text-slate-500">Petugas:</span>
+                <span className="font-medium text-slate-700">{deletingInspection.inspectorName}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-500">Hasil Evaluasi:</span>
+                <span className="font-bold text-slate-900">
+                  {deletingInspection.totalScore ?? 0}% ({deletingInspection.overallGrade?.toUpperCase()})
+                </span>
+              </div>
+            </div>
+
+            {/* Check for Linked Violations / Penalties */}
+            {violations.some((v) => v.inspectionId === deletingInspection.id || penalties.some((p) => p.violationId === v.id && v.inspectionId === deletingInspection.id)) && (
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>Catatan Relasi Pelanggaran & Kas Denda</span>
+                </div>
+                <p className="text-amber-700 leading-relaxed">
+                  Pemeriksaan ini memiliki catatan temuan pelanggaran / sanksi denda yang pernah diterbitkan.
+                  Menghapus pemeriksaan ini <strong>tidak akan menghapus catatan pelanggaran atau bukti kuitansi denda</strong> demi menjaga integritas data audit dan pembukuan kas.
+                </p>
+              </div>
+            )}
+
+            {deleteModalError && (
+              <div className="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs border border-rose-200 flex items-start gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Gagal Menghapus</p>
+                  <p className="text-[11px] mt-0.5">{deleteModalError}</p>
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setDeletingInspection(null)}
+                disabled={isDeleting}
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                isLoading={isDeleting}
+                disabled={isDeleting}
+                onClick={handleConfirmDelete}
+              >
+                Hapus Pemeriksaan
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       {/* Modal: Detail Pemeriksaan */}

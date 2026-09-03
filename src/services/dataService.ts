@@ -251,6 +251,120 @@ export const DataService = {
     return newInspection;
   },
 
+  async updateInspection(
+    inspectionId: string,
+    inspectionUpdates: Partial<Omit<Inspection, 'id' | 'createdAt'>>,
+    itemsData: Array<{ id?: string; itemName: string; passed: boolean; score?: number; notes?: string }>
+  ): Promise<void> {
+    const now = new Date().toISOString();
+    const cleanUpdates = {
+      ...inspectionUpdates,
+      updatedAt: now,
+    };
+
+    if (isFirebaseConfigured && db) {
+      const batch = writeBatch(db!);
+      const inspRef = doc(db!, 'inspections', inspectionId);
+      batch.update(inspRef, sanitizeFirestorePayload(cleanUpdates));
+
+      // Query existing inspection_items to update or replace
+      const itemsSnap = await getDocs(
+        query(collection(db!, 'inspection_items'), where('inspectionId', '==', inspectionId))
+      );
+      const existingItemsMap = new Map<string, InspectionItem>();
+      itemsSnap.docs.forEach((d) => {
+        existingItemsMap.set(d.id, { id: d.id, ...d.data() } as InspectionItem);
+      });
+
+      // Update or create items
+      for (let idx = 0; idx < itemsData.length; idx++) {
+        const item = itemsData[idx];
+        if (item.id && existingItemsMap.has(item.id)) {
+          const itemRef = doc(db!, 'inspection_items', item.id);
+          batch.update(
+            itemRef,
+            sanitizeFirestorePayload({
+              itemName: item.itemName,
+              passed: item.passed,
+              score: item.score,
+              notes: item.notes,
+            })
+          );
+        } else {
+          // If no id or new, set with generated id
+          const newId = item.id || `ii-${Date.now()}-${idx}`;
+          const itemRef = doc(db!, 'inspection_items', newId);
+          batch.set(
+            itemRef,
+            sanitizeFirestorePayload({
+              id: newId,
+              inspectionId,
+              itemName: item.itemName,
+              passed: item.passed,
+              score: item.score,
+              notes: item.notes,
+              createdAt: now,
+            })
+          );
+        }
+      }
+
+      await batch.commit();
+      return;
+    }
+
+    // Offline / LocalStorage Fallback
+    const currentInspections = getLocalCollection<Inspection>(STORAGE_KEYS.inspections, seed.INITIAL_INSPECTIONS);
+    const updatedInspections = currentInspections.map((i) =>
+      i.id === inspectionId ? { ...i, ...cleanUpdates } : i
+    );
+    setLocalCollection(STORAGE_KEYS.inspections, updatedInspections);
+
+    const currentItems = getLocalCollection<InspectionItem>(STORAGE_KEYS.inspection_items, seed.INITIAL_INSPECTION_ITEMS);
+    const otherItems = currentItems.filter((it) => it.inspectionId !== inspectionId);
+    const newItems: InspectionItem[] = itemsData.map((item, idx) => ({
+      id: item.id || `ii-${Date.now()}-${idx}`,
+      inspectionId,
+      itemName: item.itemName,
+      passed: item.passed,
+      score: item.score,
+      notes: item.notes,
+      createdAt: now,
+    }));
+    setLocalCollection(STORAGE_KEYS.inspection_items, [...otherItems, ...newItems]);
+  },
+
+  async deleteInspection(inspectionId: string): Promise<void> {
+    if (isFirebaseConfigured && db) {
+      const batch = writeBatch(db!);
+      const inspRef = doc(db!, 'inspections', inspectionId);
+      batch.delete(inspRef);
+
+      const itemsSnap = await getDocs(
+        query(collection(db!, 'inspection_items'), where('inspectionId', '==', inspectionId))
+      );
+      itemsSnap.docs.forEach((d) => {
+        batch.delete(doc(db!, 'inspection_items', d.id));
+      });
+
+      await batch.commit();
+      return;
+    }
+
+    // Offline / LocalStorage Fallback
+    const currentInspections = getLocalCollection<Inspection>(STORAGE_KEYS.inspections, seed.INITIAL_INSPECTIONS);
+    setLocalCollection(
+      STORAGE_KEYS.inspections,
+      currentInspections.filter((i) => i.id !== inspectionId)
+    );
+
+    const currentItems = getLocalCollection<InspectionItem>(STORAGE_KEYS.inspection_items, seed.INITIAL_INSPECTION_ITEMS);
+    setLocalCollection(
+      STORAGE_KEYS.inspection_items,
+      currentItems.filter((it) => it.inspectionId !== inspectionId)
+    );
+  },
+
   // ============================================================
   // VIOLATION TYPES & RULES
   // ============================================================

@@ -151,13 +151,13 @@ service cloud.firestore {
       allow read: if isCleanerOrAdmin() || (resource.data.classId != null && isClassTeacher(resource.data.classId));
       allow create: if isAdmin() || (isCleaner() && request.resource.data.inspectorId == request.auth.uid);
       allow update: if isAdmin() || (isCleaner() && resource.data.inspectorId == request.auth.uid && request.resource.data.inspectorId == resource.data.inspectorId);
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (isCleaner() && resource.data.inspectorId == request.auth.uid);
     }
 
     match /inspection_items/{itemId} {
       allow read: if isCleanerOrAdmin() || (resource.data.inspectionId != null && isInspectionItemClassTeacher(resource.data.inspectionId));
       allow create, update: if isCleanerOrAdmin();
-      allow delete: if isAdmin();
+      allow delete: if isCleanerOrAdmin();
     }
 
     // ============================================================

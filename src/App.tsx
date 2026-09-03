@@ -25,6 +25,7 @@ import { AdminUsersPage } from './pages/admin/AdminUsersPage';
 import { AdminAreasPage } from './pages/admin/AdminAreasPage';
 import { AdminViolationsRulesPage } from './pages/admin/AdminViolationsRulesPage';
 import { AdminPenaltiesPage } from './pages/admin/AdminPenaltiesPage';
+import { AdminReportsPage } from './pages/admin/AdminReportsPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 
 const RootRedirect: React.FC = () => {
@@ -121,6 +122,7 @@ export function App() {
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/areas" element={<AdminAreasPage />} />
               <Route path="/admin/penalties" element={<AdminPenaltiesPage />} />
+              <Route path="/admin/reports" element={<AdminReportsPage />} />
               <Route path="/admin/violations" element={<AdminViolationsRulesPage />} />
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
             </Route>

@@ -54,9 +54,14 @@ interface ChecklistFormItem {
 export const CHECKLIST_PASS_SCORE = 100;
 export const CHECKLIST_FAIL_SCORE = 40;
 
-export const calculateInspectionScore = (items: Array<{ score: number }>): number => {
+export const calculateInspectionScore = (
+  items: Array<{ passed: boolean; score?: number }>
+): number => {
   if (!items || items.length === 0) return 0;
-  const total = items.reduce((acc, curr) => acc + curr.score, 0);
+  const total = items.reduce((acc, curr) => {
+    const itemScore = curr.passed ? CHECKLIST_PASS_SCORE : CHECKLIST_FAIL_SCORE;
+    return acc + itemScore;
+  }, 0);
   return Math.round(total / items.length);
 };
 
@@ -228,7 +233,7 @@ export const InspectionsPage: React.FC = () => {
             id: it.id,
             name: it.itemName,
             passed: it.passed,
-            score: it.score ?? (it.passed ? CHECKLIST_PASS_SCORE : CHECKLIST_FAIL_SCORE),
+            score: it.passed ? CHECKLIST_PASS_SCORE : CHECKLIST_FAIL_SCORE,
             notes: it.notes || '',
           }))
         );
@@ -305,7 +310,7 @@ export const InspectionsPage: React.FC = () => {
         id: item.id,
         itemName: item.name,
         passed: item.passed,
-        score: item.score,
+        score: item.passed ? CHECKLIST_PASS_SCORE : CHECKLIST_FAIL_SCORE,
         notes: item.notes,
       }));
 
@@ -450,7 +455,7 @@ export const InspectionsPage: React.FC = () => {
       const inspectionItemsPayload = checklistItems.map((item) => ({
         itemName: item.name,
         passed: item.passed,
-        score: item.score,
+        score: item.passed ? CHECKLIST_PASS_SCORE : CHECKLIST_FAIL_SCORE,
         notes: item.notes,
       }));
 

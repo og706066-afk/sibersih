@@ -1,8 +1,8 @@
 import React from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { TopBar, BottomNavigation } from '../components/common';
-import { Cloud, CloudOff } from 'lucide-react';
+import { Cloud, CloudOff, User } from 'lucide-react';
 import type { UserRole } from '../types';
 
 export const AppShell: React.FC = () => {
@@ -20,13 +20,15 @@ export const AppShell: React.FC = () => {
       if (path.includes('/violations')) return { title: 'Daftar Pelanggaran', subtitle: 'Catatan & bukti ketidakbersihan' };
       if (path.includes('/penalties')) return { title: 'Manajemen Denda', subtitle: 'Pelunasan sanksi kebersihan' };
       if (path.includes('/inventory')) return { title: 'Inventaris Kebersihan', subtitle: 'Stok alat & bahan pembersih' };
+      if (path.includes('/profile')) return { title: 'Profil Petugas', subtitle: 'Informasi akun kebersihan & keamanan' };
       return { title: 'SIBERSIH Petugas', subtitle: 'Sistem Informasi Kebersihan' };
     }
 
     if (path.startsWith('/teacher')) {
       if (path.includes('/history')) return { title: 'Riwayat Kelas', subtitle: 'Log kebersihan ruang kelas' };
       if (path.includes('/violations')) return { title: 'Pelanggaran Kelas', subtitle: 'Catatan denda & sanksi' };
-      if (path.includes('/profile')) return { title: 'Profil Ustadz/ah', subtitle: 'Informasi akun pendidik' };
+      if (path.includes('/reports')) return { title: 'Laporan & Rekapitulasi', subtitle: 'Rekapitulasi kelas & cetak dokumen' };
+      if (path.includes('/profile')) return { title: 'Profil Ustadz/ah', subtitle: 'Informasi akun pendidik & keamanan' };
       return { title: 'Monitoring Kebersihan', subtitle: 'Pantauan Ruang Kelas Santri' };
     }
 
@@ -37,6 +39,7 @@ export const AppShell: React.FC = () => {
       if (path.includes('/reports')) return { title: 'Laporan & Rekapitulasi', subtitle: 'Rekap kebersihan, pelanggaran & kas denda' };
       if (path.includes('/violations')) return { title: 'Aturan & Pelanggaran', subtitle: 'Konfigurasi jenis denda' };
       if (path.includes('/settings')) return { title: 'Pengaturan Sistem', subtitle: 'Konfigurasi Firebase & database' };
+      if (path.includes('/profile')) return { title: 'Profil Administrator', subtitle: 'Pengaturan akun & hak akses' };
       return { title: 'SIBERSIH Admin', subtitle: 'Panel Kontrol & Manajemen' };
     }
 
@@ -45,13 +48,25 @@ export const AppShell: React.FC = () => {
 
   const { title, subtitle } = getPageTitle();
 
+  const getProfileLink = () => {
+    switch (currentUser.role) {
+      case 'admin':
+        return '/admin/profile';
+      case 'teacher':
+        return '/teacher/profile';
+      case 'cleaner':
+      default:
+        return '/cleaner/profile';
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center">
       {/* Desktop simulated mobile frame or wide screen container */}
       <div className="w-full max-w-lg min-h-screen bg-slate-50 flex flex-col shadow-xl relative border-x border-slate-200/60 pb-20">
         
         {/* Top Demo/Ujikom Role Switcher Banner */}
-        <div className="bg-slate-900 text-slate-300 text-xs px-3 py-1.5 flex items-center justify-between z-50">
+        <div className="no-print bg-slate-900 text-slate-300 text-xs px-3 py-1.5 flex items-center justify-between z-50">
           <div className="flex items-center gap-1.5">
             {isFirebaseActive ? (
               <span className="flex items-center gap-1 text-emerald-400 font-medium">
@@ -90,20 +105,31 @@ export const AppShell: React.FC = () => {
 
 
         {/* Top Navigation Bar */}
-        <TopBar
-          title={title}
-          subtitle={subtitle}
-          userRole={currentUser.role}
-          actions={
-            <button
-              onClick={logout}
-              className="text-xs text-slate-500 hover:text-rose-600 font-medium px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors"
-              title="Keluar"
-            >
-              Keluar
-            </button>
-          }
-        />
+        <div className="no-print">
+          <TopBar
+            title={title}
+            subtitle={subtitle}
+            userRole={currentUser.role}
+            actions={
+              <div className="flex items-center gap-1">
+                <Link
+                  to={getProfileLink()}
+                  className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  title="Profil Akun & Ganti Password"
+                >
+                  <User className="w-4 h-4" />
+                </Link>
+                <button
+                  onClick={logout}
+                  className="text-xs text-slate-500 hover:text-rose-600 font-medium px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
+                  title="Keluar"
+                >
+                  Keluar
+                </button>
+              </div>
+            }
+          />
+        </div>
 
         {/* Main Content Body */}
         <main className="flex-1 p-4 overflow-y-auto">
@@ -111,7 +137,9 @@ export const AppShell: React.FC = () => {
         </main>
 
         {/* Bottom Navigation */}
-        <BottomNavigation role={currentUser.role} />
+        <div className="no-print">
+          <BottomNavigation role={currentUser.role} />
+        </div>
       </div>
     </div>
   );

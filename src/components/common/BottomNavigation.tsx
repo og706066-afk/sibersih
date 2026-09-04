@@ -11,6 +11,7 @@ import {
   Settings,
   GraduationCap,
   History,
+  FileText,
   User,
 } from 'lucide-react';
 import type { UserRole } from '../../types';
@@ -50,6 +51,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ role }) => {
           { to: '/teacher', label: 'Kelas Saya', icon: <GraduationCap className="w-5 h-5" /> },
           { to: '/teacher/history', label: 'Riwayat', icon: <History className="w-5 h-5" /> },
           { to: '/teacher/violations', label: 'Pelanggaran', icon: <AlertTriangle className="w-5 h-5" /> },
+          { to: '/teacher/reports', label: 'Laporan', icon: <FileText className="w-5 h-5" /> },
           { to: '/teacher/profile', label: 'Profil', icon: <User className="w-5 h-5" /> },
         ];
       default:

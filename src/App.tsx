@@ -12,11 +12,13 @@ import { InspectionsPage } from './pages/cleaner/InspectionsPage';
 import { ViolationsPage } from './pages/cleaner/ViolationsPage';
 import { PenaltiesPage } from './pages/cleaner/PenaltiesPage';
 import { InventoryPage } from './pages/cleaner/InventoryPage';
+import { CleanerProfilePage } from './pages/cleaner/CleanerProfilePage';
 
 // Teacher Pages
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
 import { TeacherHistoryPage } from './pages/teacher/TeacherHistoryPage';
 import { TeacherViolationsPage } from './pages/teacher/TeacherViolationsPage';
+import { TeacherReportsPage } from './pages/teacher/TeacherReportsPage';
 import { TeacherProfilePage } from './pages/teacher/TeacherProfilePage';
 
 // Admin Pages
@@ -27,6 +29,7 @@ import { AdminViolationsRulesPage } from './pages/admin/AdminViolationsRulesPage
 import { AdminPenaltiesPage } from './pages/admin/AdminPenaltiesPage';
 import { AdminReportsPage } from './pages/admin/AdminReportsPage';
 import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
+import { AdminProfilePage } from './pages/admin/AdminProfilePage';
 
 const RootRedirect: React.FC = () => {
   const { currentUser, isLoading } = useAuth();
@@ -106,6 +109,7 @@ export function App() {
               <Route path="/cleaner/violations" element={<ViolationsPage />} />
               <Route path="/cleaner/penalties" element={<PenaltiesPage />} />
               <Route path="/cleaner/inventory" element={<InventoryPage />} />
+              <Route path="/cleaner/profile" element={<CleanerProfilePage />} />
             </Route>
 
             {/* FIX 1: Role 3: Ustadz / Ustadzah (Read-Only) Route Guard */}
@@ -113,6 +117,7 @@ export function App() {
               <Route path="/teacher" element={<TeacherDashboard />} />
               <Route path="/teacher/history" element={<TeacherHistoryPage />} />
               <Route path="/teacher/violations" element={<TeacherViolationsPage />} />
+              <Route path="/teacher/reports" element={<TeacherReportsPage />} />
               <Route path="/teacher/profile" element={<TeacherProfilePage />} />
             </Route>
 
@@ -125,6 +130,7 @@ export function App() {
               <Route path="/admin/reports" element={<AdminReportsPage />} />
               <Route path="/admin/violations" element={<AdminViolationsRulesPage />} />
               <Route path="/admin/settings" element={<AdminSettingsPage />} />
+              <Route path="/admin/profile" element={<AdminProfilePage />} />
             </Route>
           </Route>
 

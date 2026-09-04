@@ -23,3 +23,86 @@ body {
   display: flex;
   flex-direction: column;
 }
+
+/* ============================================================
+   PRINT MEDIA STYLING — SIBERSIH FORMAL REPORT PRINTER
+   ============================================================ */
+@media print {
+  body {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Hide app interactive UI, navigation, demo banners, floating elements */
+  .no-print,
+  nav,
+  header,
+  .app-shell-top-banner,
+  button,
+  .no-print * {
+    display: none !important;
+  }
+
+  /* Expand container to standard A4 printable full-width */
+  #root,
+  .min-h-screen,
+  .max-w-lg,
+  .max-w-4xl,
+  main {
+    max-width: 100% !important;
+    width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+    background: #ffffff !important;
+  }
+
+  /* Display formal print container */
+  .print-only {
+    display: block !important;
+  }
+
+  /* Table formatting on print */
+  .printable-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin-top: 8px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .printable-table th,
+  .printable-table td {
+    border: 1px solid #94a3b8 !important;
+    padding: 6px 8px !important;
+    text-align: left !important;
+    font-size: 9.5pt !important;
+  }
+
+  .printable-table th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    font-weight: bold !important;
+    text-transform: uppercase !important;
+    font-size: 8.5pt !important;
+  }
+
+  /* Page break rules */
+  .page-break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  .page-break-after {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+}
+
+@media screen {
+  .print-only {
+    display: none !important;
+  }
+}

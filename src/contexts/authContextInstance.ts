@@ -10,6 +10,7 @@ export interface AuthContextType {
   login: (email: string, password: string) => Promise<UserProfile>;
 
   register: (email: string, password: string, displayName: string, role: UserRole) => Promise<void>;
+  changePassword: (newPassword: string) => Promise<void>;
   logout: () => Promise<void>;
   switchDemoRole: (role: UserRole) => void;
 }

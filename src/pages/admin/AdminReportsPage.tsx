@@ -16,6 +16,7 @@ import {
   User,
   ChevronRight,
   X,
+  Printer,
 } from 'lucide-react';
 
 import {
@@ -28,6 +29,7 @@ import {
   EmptyState,
   Button,
 } from '../../components/common';
+import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../services/dataService';
 import type {
   Inspection,
@@ -59,6 +61,7 @@ interface UnifiedReportItem {
 }
 
 export const AdminReportsPage: React.FC = () => {
+  const { currentUser } = useAuth();
   // Primary Collections
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [violations, setViolations] = useState<Violation[]>([]);
@@ -333,32 +336,45 @@ export const AdminReportsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      {/* Header & Reset Button */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h2 className="text-base font-bold text-slate-900">Laporan & Rekapitulasi</h2>
-          <p className="text-xs text-slate-500">
-            Pusat analisis data kebersihan, evaluasi checklist, temuan pelanggaran & kas denda
-          </p>
+      {/* Interactive UI (Hidden during print) */}
+      <div className="no-print space-y-4">
+        {/* Header & Print/Reset Buttons */}
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="text-base font-bold text-slate-900">Laporan & Rekapitulasi</h2>
+            <p className="text-xs text-slate-500">
+              Pusat analisis data kebersihan, evaluasi checklist, temuan pelanggaran & kas denda
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              size="sm"
+              variant="outline"
+              leftIcon={<Printer className="w-3.5 h-3.5" />}
+              onClick={() => window.print()}
+              className="text-xs shrink-0"
+            >
+              Cetak Laporan
+            </Button>
+            {(datePreset !== 'all' ||
+              selectedClassId !== 'all' ||
+              selectedAreaId !== 'all' ||
+              selectedCategory !== 'all' ||
+              searchQuery) && (
+              <Button
+                size="sm"
+                variant="outline"
+                leftIcon={<X className="w-3.5 h-3.5" />}
+                onClick={handleResetFilters}
+                className="text-xs shrink-0"
+              >
+                Reset Filter
+              </Button>
+            )}
+          </div>
         </div>
-        {(datePreset !== 'all' ||
-          selectedClassId !== 'all' ||
-          selectedAreaId !== 'all' ||
-          selectedCategory !== 'all' ||
-          searchQuery) && (
-          <Button
-            size="sm"
-            variant="outline"
-            leftIcon={<X className="w-3.5 h-3.5" />}
-            onClick={handleResetFilters}
-            className="text-xs shrink-0"
-          >
-            Reset Filter
-          </Button>
-        )}
-      </div>
 
-      {/* KPI Summary Cards Grid */}
+        {/* KPI Summary Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
         {/* Total Inspeksi & Nilai Rata-rata */}
         <Card className="p-3 bg-white border-emerald-200/80 flex flex-col justify-between">
@@ -876,6 +892,314 @@ export const AdminReportsPage: React.FC = () => {
           </div>
         )}
       </Modal>
+      </div>
+
+      {/* ============================================================
+          PRINT-ONLY OFFICIAL FORMAL DOCUMENT TEMPLATE (ADMIN)
+          ============================================================ */}
+      <div className="print-only font-serif p-4 text-black bg-white">
+        {/* Kop Surat Resmi */}
+        <div className="text-center border-b-2 border-black pb-3 mb-4">
+          <h1 className="text-lg font-bold tracking-wide uppercase">
+            SIBERSIH — SISTEM INFORMASI KEBERSIHAN PESANTREN
+          </h1>
+          <h2 className="text-sm font-semibold tracking-wider uppercase mt-0.5">
+            LAPORAN REKAPITULASI & EVALUASI KEBERSIHAN PESANTREN
+          </h2>
+          <p className="text-[10px] text-slate-700 italic mt-0.5">
+            Dokumen Resmi Rekapitulasi Mutu Kebersihan Lingkungan, Checklist Evaluasi, & Kas Denda Santri
+          </p>
+        </div>
+
+        {/* Metadata Header */}
+        <div className="grid grid-cols-2 text-xs border border-slate-400 p-2.5 rounded mb-4 bg-slate-50/50">
+          <div className="space-y-1">
+            <div>
+              <strong>Filter Kelas:</strong>{' '}
+              {selectedClassId === 'all'
+                ? 'Semua Kelas'
+                : classes.find((c) => c.id === selectedClassId)?.name || selectedClassId}
+            </div>
+            <div>
+              <strong>Filter Area:</strong>{' '}
+              {selectedAreaId === 'all'
+                ? 'Semua Area / Zona Pesantren'
+                : areas.find((a) => a.id === selectedAreaId)?.name || selectedAreaId}
+            </div>
+            <div>
+              <strong>Kategori Data:</strong>{' '}
+              {selectedCategory === 'all'
+                ? 'Seluruh Dokumen (Inspeksi, Pelanggaran, Kas Denda)'
+                : selectedCategory === 'inspections'
+                ? 'Pemeriksaan Kebersihan'
+                : selectedCategory === 'violations'
+                ? 'Temuan Pelanggaran'
+                : 'Kas & Sanksi Denda'}
+            </div>
+          </div>
+          <div className="space-y-1 text-right">
+            <div>
+              <strong>Periode:</strong>{' '}
+              {datePreset === 'all'
+                ? 'Semua Data Riwayat'
+                : datePreset === 'today'
+                ? 'Hari Ini'
+                : datePreset === '7d'
+                ? '7 Hari Terakhir'
+                : datePreset === '30d'
+                ? '30 Hari Terakhir'
+                : `${startDate || '...'} s.d. ${endDate || '...'}`}
+            </div>
+            <div>
+              <strong>Tanggal Cetak:</strong>{' '}
+              {new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}
+            </div>
+            <div>
+              <strong>Dicetak Oleh:</strong>{' '}
+              {currentUser?.displayName || currentUser?.email || 'Administrator Pesantren'}
+            </div>
+          </div>
+        </div>
+
+        {/* I. Ringkasan Eksekutif Mutu & Kas Kebersihan */}
+        <div className="mb-4">
+          <h3 className="text-xs font-bold uppercase tracking-wider border-b border-slate-300 pb-1 mb-2">
+            I. Ringkasan Eksekutif Mutu Kebersihan & Kas Pesantren
+          </h3>
+          <table className="printable-table text-xs">
+            <thead>
+              <tr>
+                <th>Total Pemeriksaan</th>
+                <th>Rata-rata Skor</th>
+                <th>Predikat Umum</th>
+                <th>Total Pelanggaran</th>
+                <th>Kas Denda Lunas</th>
+                <th>Kas Denda Tertunda</th>
+                <th>Denda Dibatalkan</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td className="text-center font-bold">{kpiMetrics.totalInspections} Inspeksi</td>
+                <td className="text-center font-bold">{kpiMetrics.avgCleanlinessScore} / 100</td>
+                <td className="text-center">
+                  <span className="font-semibold">
+                    {kpiMetrics.avgCleanlinessScore >= 85
+                      ? 'Mumtaz (Sangat Baik)'
+                      : kpiMetrics.avgCleanlinessScore >= 75
+                      ? 'Jayyid (Cukup)'
+                      : kpiMetrics.avgCleanlinessScore >= 60
+                      ? 'Maqbul (Perlu Evaluasi)'
+                      : 'Mardud (Kotor)'}
+                  </span>
+                </td>
+                <td className="text-center text-rose-700 font-bold">{kpiMetrics.totalViolations} Kasus</td>
+                <td className="text-right font-bold text-emerald-800">
+                  Rp {kpiMetrics.totalPaidAmount.toLocaleString('id-ID')}
+                </td>
+                <td className="text-right font-bold text-amber-800">
+                  Rp {kpiMetrics.totalPendingAmount.toLocaleString('id-ID')}
+                </td>
+                <td className="text-right text-slate-500">
+                  Rp {kpiMetrics.totalCancelledAmount.toLocaleString('id-ID')}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        {/* II. Rekapitulasi Pemeriksaan Kebersihan */}
+        {(selectedCategory === 'all' || selectedCategory === 'inspections') && (
+          <div className="mb-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider border-b border-slate-300 pb-1 mb-2">
+              II. Rekapitulasi Hasil Pemeriksaan Kebersihan ({filteredInspections.length} Data)
+            </h3>
+            {filteredInspections.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-2">
+                Tidak ada data pemeriksaan kebersihan pada filter/periode yang dipilih.
+              </p>
+            ) : (
+              <table className="printable-table text-[11px]">
+                <thead>
+                  <tr>
+                    <th className="w-8 text-center">No</th>
+                    <th>Tanggal</th>
+                    <th>Lokasi / Area</th>
+                    <th>Kelas</th>
+                    <th>Petugas Pemeriksa</th>
+                    <th className="text-center">Skor</th>
+                    <th className="text-center">Status</th>
+                    <th>Catatan Evaluasi</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredInspections.map((insp, idx) => (
+                    <tr key={insp.id}>
+                      <td className="text-center">{idx + 1}</td>
+                      <td>{insp.date}</td>
+                      <td className="font-semibold">{insp.areaName}</td>
+                      <td>{insp.classId ? (classes.find((c) => c.id === insp.classId)?.name || insp.classId) : '-'}</td>
+                      <td>{insp.inspectorName}</td>
+                      <td className="text-center font-bold">{insp.totalScore ?? '-'}%</td>
+                      <td className="text-center">
+                        {(insp.totalScore ?? 0) >= 85 ? 'Lolos' : 'Perlu Evaluasi'}
+                      </td>
+                      <td className="text-slate-600">{insp.notes || '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* III. Log Temuan Pelanggaran Kebersihan */}
+        {(selectedCategory === 'all' || selectedCategory === 'violations') && (
+          <div className="mb-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider border-b border-slate-300 pb-1 mb-2">
+              III. Log Temuan Pelanggaran Kebersihan ({filteredViolations.length} Kasus)
+            </h3>
+            {filteredViolations.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-2">
+                Tidak ada temuan pelanggaran kebersihan pada filter/periode yang dipilih.
+              </p>
+            ) : (
+              <table className="printable-table text-[11px]">
+                <thead>
+                  <tr>
+                    <th className="w-8 text-center">No</th>
+                    <th>Tanggal</th>
+                    <th>Lokasi Temuan</th>
+                    <th>Jenis Pelanggaran</th>
+                    <th>Tingkat Keparahan</th>
+                    <th>Petugas Pelapor</th>
+                    <th>Status Sanksi</th>
+                    <th>Deskripsi / Catatan</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredViolations.map((viol, idx) => (
+                    <tr key={viol.id}>
+                      <td className="text-center">{idx + 1}</td>
+                      <td>{viol.date}</td>
+                      <td>{viol.areaName}</td>
+                      <td className="font-semibold">{viol.violationTypeName}</td>
+                      <td className="capitalize">{viol.severity}</td>
+                      <td>{viol.reportedByName}</td>
+                      <td>
+                        {viol.status === 'cancelled'
+                          ? 'Dibatalkan'
+                          : viol.penaltyCreated
+                          ? 'Denda Diterbitkan'
+                          : 'Peringatan'}
+                      </td>
+                      <td className="text-slate-600">{viol.description}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* IV. Rekapitulasi Kas & Sanksi Denda */}
+        {(selectedCategory === 'all' || selectedCategory === 'penalties') && (
+          <div className="mb-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider border-b border-slate-300 pb-1 mb-2">
+              IV. Rekapitulasi Kas & Sanksi Denda ({filteredPenalties.length} Transaksi)
+            </h3>
+            {filteredPenalties.length === 0 ? (
+              <p className="text-xs text-slate-500 italic py-2">
+                Tidak ada data kas denda pada filter/periode yang dipilih.
+              </p>
+            ) : (
+              <table className="printable-table text-[11px]">
+                <thead>
+                  <tr>
+                    <th className="w-8 text-center">No</th>
+                    <th>Tanggal Terbit</th>
+                    <th>Kelas / Penanggung Jawab</th>
+                    <th className="text-right">Nominal Sanksi</th>
+                    <th className="text-center">Status Pembayaran</th>
+                    <th>No. Kuitansi</th>
+                    <th>Penerima Kas</th>
+                    <th>Alasan Denda</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPenalties.map((pen, idx) => (
+                    <tr key={pen.id}>
+                      <td className="text-center">{idx + 1}</td>
+                      <td>{pen.issuedDate}</td>
+                      <td className="font-semibold">{pen.className || pen.responsiblePerson || 'Piket Ruang'}</td>
+                      <td className="text-right font-bold">
+                        Rp {pen.amount.toLocaleString('id-ID')}
+                      </td>
+                      <td className="text-center uppercase font-semibold">
+                        {pen.status === 'paid'
+                          ? 'Lunas'
+                          : pen.status === 'cancelled'
+                          ? 'Batal'
+                          : 'Belum Lunas'}
+                      </td>
+                      <td className="font-mono">{pen.receiptNumber || '-'}</td>
+                      <td>{pen.paidReceivedById || '-'}</td>
+                      <td className="text-slate-600">{pen.reason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+
+        {/* V. Evaluasi & Catatan Umum */}
+        <div className="mb-4 border border-slate-300 p-2.5 rounded bg-slate-50/30 text-xs">
+          <h3 className="font-bold uppercase tracking-wider text-slate-800 mb-1">
+            V. Catatan Evaluasi & Rekomendasi Pengasuhan
+          </h3>
+          <p className="text-slate-700 leading-relaxed text-[11px]">
+            Laporan ini dihimpun secara otomatis dari sistem informasi kebersihan SIBERSIH berdasarkan
+            pemeriksaan berkala unit kebersihan dan pengawasan asatidz. Rekapitulasi ini sah dan dapat
+            dipergunakan sebagai bahan pertimbangan evaluasi kedisiplinan dan pembinaan santri di lingkungan pesantren.
+          </p>
+        </div>
+
+        {/* VI. Lembar Pengesahan Resmi 3 Kolom */}
+        <div className="signature-section mt-6 pt-4 border-t border-black text-xs">
+          <div className="text-right mb-4">
+            Dicetak pada: {new Date().toLocaleDateString('id-ID', { dateStyle: 'full' })}
+          </div>
+          <div className="grid grid-cols-3 gap-4 text-center">
+            <div>
+              <p className="font-medium text-slate-700">Petugas Bagian Kebersihan,</p>
+              <div className="h-16 flex items-end justify-center">
+                <div className="border-b border-black w-36"></div>
+              </div>
+              <p className="font-bold text-slate-900 mt-1">Koordinator Kebersihan</p>
+              <p className="text-[10px] text-slate-500">Unit Lingkungan Pesantren</p>
+            </div>
+
+            <div>
+              <p className="font-medium text-slate-700">Bagian Kesantrian / Pengasuhan,</p>
+              <div className="h-16 flex items-end justify-center">
+                <div className="border-b border-black w-36"></div>
+              </div>
+              <p className="font-bold text-slate-900 mt-1">Ustadz Pembina Asrama</p>
+              <p className="text-[10px] text-slate-500">Divisi Pengasuhan Santri</p>
+            </div>
+
+            <div>
+              <p className="font-medium text-slate-700">Mengetahui & Menyetujui,</p>
+              <div className="h-16 flex items-end justify-center">
+                <div className="border-b border-black w-36"></div>
+              </div>
+              <p className="font-bold text-slate-900 mt-1">Kepala Bagian Administrasi</p>
+              <p className="text-[10px] text-slate-500">Pimpinan Pesantren SIBERSIH</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

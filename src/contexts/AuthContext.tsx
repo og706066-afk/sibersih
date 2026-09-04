@@ -5,6 +5,7 @@ import {
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
   createUserWithEmailAndPassword,
+  updatePassword as firebaseUpdatePassword,
   onAuthStateChanged,
   type User as FirebaseUser,
 } from 'firebase/auth';
@@ -153,6 +154,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser(newProfile);
   };
 
+  const changePassword = async (newPassword: string): Promise<void> => {
+    if (!isFirebaseConfigured || !auth) {
+      // Demo mode password update simulation
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      return;
+    }
+
+    if (!auth.currentUser) {
+      throw new Error('Sesi autentikasi tidak ditemukan. Silakan login kembali.');
+    }
+
+    await firebaseUpdatePassword(auth.currentUser, newPassword);
+  };
+
   const logout = async (): Promise<void> => {
     if (auth && isFirebaseConfigured) {
       await firebaseSignOut(auth);
@@ -181,6 +196,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isFirebaseActive: isFirebaseConfigured,
         login,
         register,
+        changePassword,
         logout,
         switchDemoRole,
       }}

@@ -24,7 +24,12 @@ import {
 } from '../../components/common';
 import { DataService } from '../../services/dataService';
 import { useAuth } from '../../contexts/AuthContext';
-import { getIndicatorDescription } from '../../utils/inspectionUtils';
+import {
+  getIndicatorDescription,
+  getCleanlinessPredicate,
+  getCleanlinessLabel,
+  getCleanlinessBadgeVariant,
+} from '../../utils/inspectionUtils';
 import type {
   Inspection,
   InspectionItem,
@@ -184,7 +189,6 @@ export const TeacherReportsPage: React.FC = () => {
 
     if (selectedCategory === 'all' || selectedCategory === 'inspections') {
       for (const insp of filteredInspections) {
-        const isClean = insp.overallGrade === 'clean' || (insp.totalScore || 0) >= 85;
         items.push({
           id: `insp-${insp.id}`,
           category: 'inspection',
@@ -193,10 +197,10 @@ export const TeacherReportsPage: React.FC = () => {
           subtitle: insp.notes || (insp.hasViolations ? 'Ada catatan temuan' : 'Kondisi ruangan bersih'),
           locationName: insp.areaName,
           actorName: insp.inspectorName || 'Petugas Kebersihan',
-          statusBadge: isClean ? (
-            <Badge variant="success" size="sm">Lolos</Badge>
-          ) : (
-            <Badge variant="danger" size="sm">Evaluasi</Badge>
+          statusBadge: (
+            <Badge variant={getCleanlinessBadgeVariant(insp.totalScore ?? 0)} size="sm">
+              {getCleanlinessPredicate(insp.totalScore ?? 0)}
+            </Badge>
           ),
           valueHighlight: `Skor ${insp.totalScore ?? 0}%`,
           rawInspection: insp,
@@ -357,8 +361,8 @@ export const TeacherReportsPage: React.FC = () => {
             <div className="text-xl font-bold text-slate-900 mt-1">
               {kpiMetrics.avgScore}%
             </div>
-            <span className="text-[11px] text-slate-400">
-              {kpiMetrics.avgScore >= 85 ? 'Grade: Bersih (Mumtaz)' : kpiMetrics.avgScore >= 75 ? 'Grade: Cukup' : 'Perlu Peningkatan'}
+            <span className="text-[11px] text-slate-500 font-medium">
+              Grade: {getCleanlinessLabel(kpiMetrics.avgScore)}
             </span>
           </Card>
 
@@ -600,7 +604,7 @@ export const TeacherReportsPage: React.FC = () => {
                 <td className="text-center font-bold">{kpiMetrics.totalInspections} Sesi</td>
                 <td className="text-center font-bold text-emerald-700">{kpiMetrics.avgScore}%</td>
                 <td className="text-center font-semibold">
-                  {kpiMetrics.avgScore >= 85 ? 'Bersih (Mumtaz)' : kpiMetrics.avgScore >= 75 ? 'Cukup (Jayyid)' : 'Kotor (Evaluasi)'}
+                  {getCleanlinessLabel(kpiMetrics.avgScore)}
                 </td>
                 <td className="text-center font-bold text-amber-700">{kpiMetrics.totalViolations} Temuan</td>
                 <td className="text-center font-bold text-emerald-700">Rp {kpiMetrics.totalPaidAmount.toLocaleString('id-ID')}</td>
@@ -638,8 +642,8 @@ export const TeacherReportsPage: React.FC = () => {
                     <td>{insp.areaName}</td>
                     <td>{insp.inspectorName}</td>
                     <td className="text-center font-bold">{insp.totalScore ?? 0}%</td>
-                    <td className="text-center font-semibold uppercase text-[10px]">
-                      {insp.overallGrade || (insp.totalScore && insp.totalScore >= 85 ? 'clean' : 'moderate')}
+                    <td className="text-center font-semibold text-[11px]">
+                      {getCleanlinessPredicate(insp.totalScore ?? 0)}
                     </td>
                     <td>{insp.notes || (insp.hasViolations ? 'Catatan temuan terlampir' : 'Kondisi rapi & bersih')}</td>
                   </tr>

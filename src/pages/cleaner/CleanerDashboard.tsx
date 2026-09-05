@@ -14,6 +14,10 @@ import {
 import { Card, Button, Badge, LoadingState } from '../../components/common';
 
 import { DataService } from '../../services/dataService';
+import {
+  getCleanlinessBadgeVariant,
+  getCleanlinessPredicate,
+} from '../../utils/inspectionUtils';
 import type { Inspection, Violation, Penalty, InventoryItem, Schedule } from '../../types';
 
 export const CleanerDashboard: React.FC = () => {
@@ -219,20 +223,10 @@ export const CleanerDashboard: React.FC = () => {
                 </div>
                 <div className="text-right">
                   <Badge
-                    variant={
-                      insp.overallGrade === 'clean'
-                        ? 'success'
-                        : insp.overallGrade === 'moderate'
-                        ? 'warning'
-                        : 'danger'
-                    }
+                    variant={getCleanlinessBadgeVariant(insp.totalScore ?? 0)}
                     size="sm"
                   >
-                    {insp.overallGrade === 'clean'
-                      ? 'Bersih'
-                      : insp.overallGrade === 'moderate'
-                      ? 'Cukup'
-                      : 'Kotor'}
+                    {getCleanlinessPredicate(insp.totalScore ?? 0)}
                   </Badge>
                   <div className="text-xs font-bold text-slate-700 mt-1">
                     Skor: {insp.totalScore ?? '-'}%

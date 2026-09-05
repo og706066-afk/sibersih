@@ -3,6 +3,11 @@ import { History, Calendar, MapPin } from 'lucide-react';
 import { Card, Badge, Modal, LoadingState, EmptyState } from '../../components/common';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../services/dataService';
+import {
+  getCleanlinessBadgeVariant,
+  getCleanlinessPredicate,
+  getCleanlinessLabel,
+} from '../../utils/inspectionUtils';
 import type { Inspection, InspectionItem } from '../../types';
 
 export const TeacherHistoryPage: React.FC = () => {
@@ -113,20 +118,10 @@ export const TeacherHistoryPage: React.FC = () => {
 
                 <div className="text-right">
                   <Badge
-                    variant={
-                      insp.overallGrade === 'clean'
-                        ? 'success'
-                        : insp.overallGrade === 'moderate'
-                        ? 'warning'
-                        : 'danger'
-                    }
+                    variant={getCleanlinessBadgeVariant(insp.totalScore ?? 0)}
                     size="sm"
                   >
-                    {insp.overallGrade === 'clean'
-                      ? 'Bersih'
-                      : insp.overallGrade === 'moderate'
-                      ? 'Cukup'
-                      : 'Kotor'}
+                    {getCleanlinessPredicate(insp.totalScore ?? 0)}
                   </Badge>
                   <div className="text-xs font-bold text-slate-800 mt-1">
                     Skor: {insp.totalScore ?? 0}%
@@ -163,20 +158,10 @@ export const TeacherHistoryPage: React.FC = () => {
                 </div>
               </div>
               <Badge
-                variant={
-                  selectedInspection?.overallGrade === 'clean'
-                    ? 'success'
-                    : selectedInspection?.overallGrade === 'moderate'
-                    ? 'warning'
-                    : 'danger'
-                }
+                variant={getCleanlinessBadgeVariant(selectedInspection?.totalScore ?? 0)}
                 size="md"
               >
-                {selectedInspection?.overallGrade === 'clean'
-                  ? 'Bersih'
-                  : selectedInspection?.overallGrade === 'moderate'
-                  ? 'Cukup'
-                  : 'Kotor'}
+                {getCleanlinessLabel(selectedInspection?.totalScore ?? 0)}
               </Badge>
             </div>
 

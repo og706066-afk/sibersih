@@ -13,6 +13,10 @@ import { Card, Button, Badge, LoadingState, EmptyState } from '../../components/
 
 import { DataService } from '../../services/dataService';
 import { useAuth } from '../../contexts/AuthContext';
+import {
+  getCleanlinessBadgeVariant,
+  getCleanlinessPredicate,
+} from '../../utils/inspectionUtils';
 import type {
   ClassRoom,
   Inspection,
@@ -142,12 +146,12 @@ export const TeacherDashboard: React.FC = () => {
             <div>
               <span className="text-[10px] text-indigo-300 uppercase">Status Kebersihan Hari Ini</span>
               <div className="flex items-center gap-1.5 mt-0.5">
-                {latestInspection?.overallGrade === 'clean' ? (
-                  <Badge variant="success" size="sm">Bersih & Rapi</Badge>
-                ) : latestInspection?.overallGrade === 'moderate' ? (
-                  <Badge variant="warning" size="sm">Perlu Perhatian</Badge>
+                {latestInspection ? (
+                  <Badge variant={getCleanlinessBadgeVariant(latestInspection.totalScore ?? 0)} size="sm">
+                    {getCleanlinessPredicate(latestInspection.totalScore ?? 0)}
+                  </Badge>
                 ) : (
-                  <Badge variant="danger" size="sm">Kotor / Perlu Tindakan</Badge>
+                  <Badge variant="neutral" size="sm">Belum Ada Data</Badge>
                 )}
                 <span className="text-sm font-black text-white ml-1">
                   {latestInspection ? `${latestInspection.totalScore}%` : 'Belum Diperiksa'}

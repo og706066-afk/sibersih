@@ -1,4 +1,4 @@
-﻿import type { CleanlinessGrade } from '../types';
+import type { CleanlinessGrade } from '../types';
 
 // ============================================================
 // STANDAR SISTEM SKORING SIBERSIH
@@ -24,6 +24,78 @@ export const getCleanlinessGrade = (score: number): CleanlinessGrade => {
   if (score >= 75) return 'moderate';
   if (score >= 60) return 'dirty';
   return 'critical';
+};
+
+// ============================================================
+// PREDIKAT MUTU KEBERSIHAN PESANTREN (4 TINGKAT STANDAR)
+// ≥85: Mumtaz
+// 75–84: Jayyid
+// 60–74: Maqbul
+// <60: Rasib
+// ============================================================
+export const getCleanlinessPredicate = (score: number): string => {
+  if (score >= 85) return 'Mumtaz';
+  if (score >= 75) return 'Jayyid';
+  if (score >= 60) return 'Maqbul';
+  return 'Rasib';
+};
+
+export const getCleanlinessLabel = (score: number): string => {
+  if (score >= 85) return 'Mumtaz (Sangat Baik)';
+  if (score >= 75) return 'Jayyid (Cukup)';
+  if (score >= 60) return 'Maqbul (Perlu Evaluasi)';
+  return 'Rasib (Kritis)';
+};
+
+export const getGradePredicate = (grade?: CleanlinessGrade): string => {
+  switch (grade) {
+    case 'clean':
+      return 'Mumtaz';
+    case 'moderate':
+      return 'Jayyid';
+    case 'dirty':
+      return 'Maqbul';
+    case 'critical':
+    default:
+      return 'Rasib';
+  }
+};
+
+export const getGradeLabel = (grade?: CleanlinessGrade): string => {
+  switch (grade) {
+    case 'clean':
+      return 'Mumtaz (Sangat Baik)';
+    case 'moderate':
+      return 'Jayyid (Cukup)';
+    case 'dirty':
+      return 'Maqbul (Perlu Evaluasi)';
+    case 'critical':
+    default:
+      return 'Rasib (Kritis)';
+  }
+};
+
+export const getCleanlinessBadgeVariant = (
+  scoreOrGrade?: number | CleanlinessGrade
+): 'success' | 'info' | 'warning' | 'danger' => {
+  if (scoreOrGrade === undefined) return 'danger';
+  if (typeof scoreOrGrade === 'number') {
+    if (scoreOrGrade >= 85) return 'success';
+    if (scoreOrGrade >= 75) return 'info';
+    if (scoreOrGrade >= 60) return 'warning';
+    return 'danger';
+  }
+  switch (scoreOrGrade) {
+    case 'clean':
+      return 'success';
+    case 'moderate':
+      return 'info';
+    case 'dirty':
+      return 'warning';
+    case 'critical':
+    default:
+      return 'danger';
+  }
 };
 
 // Helper: Menghasilkan deskripsi/keterangan standar penilaian indikator

@@ -31,6 +31,11 @@ import {
 } from '../../components/common';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../services/dataService';
+import {
+  getCleanlinessPredicate,
+  getCleanlinessLabel,
+  getCleanlinessBadgeVariant,
+} from '../../utils/inspectionUtils';
 import type {
   Inspection,
   InspectionItem,
@@ -207,7 +212,6 @@ export const AdminReportsPage: React.FC = () => {
     if (selectedCategory === 'all' || selectedCategory === 'inspections') {
       for (const insp of filteredInspections) {
         const scoreText = insp.totalScore !== undefined ? `${insp.totalScore}/100` : 'Selesai';
-        const isClean = insp.overallGrade === 'clean' || (insp.totalScore || 0) >= 85;
 
         items.push({
           id: `insp-${insp.id}`,
@@ -219,10 +223,10 @@ export const AdminReportsPage: React.FC = () => {
           classId: insp.classId,
           areaId: insp.areaId,
           actorName: insp.inspectorName || 'Petugas Kebersihan',
-          statusBadge: isClean ? (
-            <Badge variant="success" size="sm">Lolos</Badge>
-          ) : (
-            <Badge variant="danger" size="sm">Evaluasi</Badge>
+          statusBadge: (
+            <Badge variant={getCleanlinessBadgeVariant(insp.totalScore ?? 0)} size="sm">
+              {getCleanlinessPredicate(insp.totalScore ?? 0)}
+            </Badge>
           ),
           valueHighlight: `Skor ${scoreText}`,
           rawInspection: insp,
@@ -390,7 +394,7 @@ export const AdminReportsPage: React.FC = () => {
             </div>
             <div className="text-[11px] text-emerald-700 font-semibold mt-0.5 flex items-center gap-1">
               <TrendingUp className="w-3 h-3" />
-              <span>Rata-rata: {kpiMetrics.avgCleanlinessScore}/100</span>
+              <span>Rata-rata: {kpiMetrics.avgCleanlinessScore}/100 ({getCleanlinessPredicate(kpiMetrics.avgCleanlinessScore)})</span>
             </div>
           </div>
         </Card>
@@ -984,13 +988,7 @@ export const AdminReportsPage: React.FC = () => {
                 <td className="text-center font-bold">{kpiMetrics.avgCleanlinessScore} / 100</td>
                 <td className="text-center">
                   <span className="font-semibold">
-                    {kpiMetrics.avgCleanlinessScore >= 85
-                      ? 'Mumtaz (Sangat Baik)'
-                      : kpiMetrics.avgCleanlinessScore >= 75
-                      ? 'Jayyid (Cukup)'
-                      : kpiMetrics.avgCleanlinessScore >= 60
-                      ? 'Maqbul (Perlu Evaluasi)'
-                      : 'Mardud (Kotor)'}
+                    {getCleanlinessLabel(kpiMetrics.avgCleanlinessScore)}
                   </span>
                 </td>
                 <td className="text-center text-rose-700 font-bold">{kpiMetrics.totalViolations} Kasus</td>
@@ -1041,8 +1039,8 @@ export const AdminReportsPage: React.FC = () => {
                       <td>{insp.classId ? (classes.find((c) => c.id === insp.classId)?.name || insp.classId) : '-'}</td>
                       <td>{insp.inspectorName}</td>
                       <td className="text-center font-bold">{insp.totalScore ?? '-'}%</td>
-                      <td className="text-center">
-                        {(insp.totalScore ?? 0) >= 85 ? 'Lolos' : 'Perlu Evaluasi'}
+                      <td className="text-center font-semibold">
+                        {getCleanlinessPredicate(insp.totalScore ?? 0)}
                       </td>
                       <td className="text-slate-600">{insp.notes || '-'}</td>
                     </tr>

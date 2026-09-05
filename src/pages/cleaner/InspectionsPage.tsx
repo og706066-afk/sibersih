@@ -55,6 +55,9 @@ import {
   calculateInspectionScore,
   getCleanlinessGrade,
   getIndicatorDescription,
+  getCleanlinessPredicate,
+  getCleanlinessLabel,
+  getCleanlinessBadgeVariant,
 } from '../../utils/inspectionUtils';
 
 const DEFAULT_CHECKLIST_TEMPLATE: ChecklistFormItem[] = [
@@ -527,7 +530,7 @@ export const InspectionsPage: React.FC = () => {
             issuedById: currentUser.uid,
             issuedByName: currentUser.displayName || 'Petugas Kebersihan',
             issuedDate: inspectionDate,
-            notes: `Diterbitkan otomatis dari hasil inspeksi (${overallGrade.toUpperCase()}). Aturan denda: ${matchingRule.description || matchingRule.violationTypeName}.`,
+            notes: `Diterbitkan otomatis dari hasil inspeksi (${getCleanlinessPredicate(totalScore)}). Aturan denda: ${matchingRule.description || matchingRule.violationTypeName}.`,
           };
         }
 
@@ -561,7 +564,7 @@ export const InspectionsPage: React.FC = () => {
         if (matchingRule) {
           setFeedbackMessage({
             type: 'success',
-            text: `Pemeriksaan ${area.name} selesai (${overallGrade.toUpperCase()}). Pelanggaran "${violationTypeName}" tercatat dan sanksi denda sebesar Rp ${matchingRule.fineAmount.toLocaleString('id-ID')} otomatis diterbitkan.`,
+            text: `Pemeriksaan ${area.name} selesai (${getCleanlinessPredicate(totalScore)}). Pelanggaran "${violationTypeName}" tercatat dan sanksi denda sebesar Rp ${matchingRule.fineAmount.toLocaleString('id-ID')} otomatis diterbitkan.`,
           });
         } else {
           setFeedbackMessage({
@@ -687,20 +690,10 @@ export const InspectionsPage: React.FC = () => {
 
                 <div className="text-right shrink-0 ml-2">
                   <Badge
-                    variant={
-                      insp.overallGrade === 'clean'
-                        ? 'success'
-                        : insp.overallGrade === 'moderate'
-                        ? 'warning'
-                        : 'danger'
-                    }
+                    variant={getCleanlinessBadgeVariant(insp.totalScore ?? 0)}
                     size="sm"
                   >
-                    {insp.overallGrade === 'clean'
-                      ? 'Bersih'
-                      : insp.overallGrade === 'moderate'
-                      ? 'Cukup'
-                      : 'Kotor'}
+                    {getCleanlinessPredicate(insp.totalScore ?? 0)}
                   </Badge>
                   <div className="text-xs font-bold text-slate-800 mt-1">
                     {insp.totalScore ?? 0}%
@@ -1027,7 +1020,6 @@ export const InspectionsPage: React.FC = () => {
                 editChecklistItems.length > 0
                   ? calculateInspectionScore(editChecklistItems)
                   : editingInspection.totalScore ?? 0;
-              const liveGrade = getCleanlinessGrade(liveScore);
 
               return (
                 <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between">
@@ -1038,20 +1030,10 @@ export const InspectionsPage: React.FC = () => {
                     </div>
                   </div>
                   <Badge
-                    variant={
-                      liveGrade === 'clean'
-                        ? 'success'
-                        : liveGrade === 'moderate'
-                        ? 'warning'
-                        : 'danger'
-                    }
+                    variant={getCleanlinessBadgeVariant(liveScore)}
                     size="md"
                   >
-                    {liveGrade === 'clean'
-                      ? 'Bersih'
-                      : liveGrade === 'moderate'
-                      ? 'Cukup'
-                      : 'Kotor'}
+                    {getCleanlinessLabel(liveScore)}
                   </Badge>
                 </div>
               );
@@ -1297,7 +1279,7 @@ export const InspectionsPage: React.FC = () => {
               <div className="flex justify-between">
                 <span className="text-slate-500">Hasil Evaluasi:</span>
                 <span className="font-bold text-slate-900">
-                  {deletingInspection.totalScore ?? 0}% ({deletingInspection.overallGrade?.toUpperCase()})
+                  {deletingInspection.totalScore ?? 0}% ({getCleanlinessPredicate(deletingInspection.totalScore ?? 0)})
                 </span>
               </div>
             </div>
@@ -1368,20 +1350,10 @@ export const InspectionsPage: React.FC = () => {
                 </div>
               </div>
               <Badge
-                variant={
-                  selectedInspection?.overallGrade === 'clean'
-                    ? 'success'
-                    : selectedInspection?.overallGrade === 'moderate'
-                    ? 'warning'
-                    : 'danger'
-                }
+                variant={getCleanlinessBadgeVariant(selectedInspection?.totalScore ?? 0)}
                 size="md"
               >
-                {selectedInspection?.overallGrade === 'clean'
-                  ? 'Bersih'
-                  : selectedInspection?.overallGrade === 'moderate'
-                  ? 'Cukup'
-                  : 'Kotor'}
+                {getCleanlinessLabel(selectedInspection?.totalScore ?? 0)}
               </Badge>
             </div>
 

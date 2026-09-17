@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, GraduationCap, LogOut, ShieldCheck } from 'lucide-react';
+import { Mail, Phone, GraduationCap, LogOut, ShieldCheck } from 'lucide-react';
 
 import { Card, Button, Badge } from '../../components/common';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../services/dataService';
-import { ChangePasswordCard } from '../../components/profile/ChangePasswordCard';
+import { ChangePasswordCard, ProfileAvatarUploader } from '../../components/profile';
 
 export const TeacherProfilePage: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -32,9 +32,7 @@ export const TeacherProfilePage: React.FC = () => {
     <div className="space-y-4">
       {/* Profile Card */}
       <Card className="p-5 bg-white text-center flex flex-col items-center">
-        <div className="w-20 h-20 rounded-full bg-indigo-50 border-2 border-indigo-200 text-indigo-600 flex items-center justify-center mb-3 shadow-xs">
-          <User className="w-10 h-10" />
-        </div>
+        <ProfileAvatarUploader fallbackVariant="teacher" />
         <h2 className="text-base font-bold text-slate-900">{currentUser?.displayName || 'Ustadz Pembina'}</h2>
         <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email}</p>
         <div className="mt-2.5">

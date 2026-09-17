@@ -11,6 +11,7 @@ export interface AuthContextType {
 
   register: (email: string, password: string, displayName: string, role: UserRole) => Promise<void>;
   changePassword: (newPassword: string) => Promise<void>;
+  updateProfilePhoto: (photoURL: string) => Promise<void>;
   logout: () => Promise<void>;
   switchDemoRole: (role: UserRole) => void;
 }

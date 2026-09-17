@@ -309,8 +309,22 @@ export const DataService = {
         }
       }
 
-      await batch.commit();
-      return;
+      try {
+        await batch.commit();
+        return;
+      } catch (error: any) {
+        console.error('Failed to update inspection in Firestore:', error);
+        if (
+          error?.code === 'permission-denied' ||
+          error?.message?.includes('insufficient permissions') ||
+          error?.message?.includes('Missing or insufficient permissions')
+        ) {
+          throw new Error(
+            'Anda tidak memiliki izin untuk mengubah pemeriksaan ini. Hanya petugas yang membuat pemeriksaan atau Administrator yang dapat mengubahnya.'
+          );
+        }
+        throw error;
+      }
     }
 
     // Offline / LocalStorage Fallback
@@ -336,19 +350,33 @@ export const DataService = {
 
   async deleteInspection(inspectionId: string): Promise<void> {
     if (isFirebaseConfigured && db) {
-      const batch = writeBatch(db!);
-      const inspRef = doc(db!, 'inspections', inspectionId);
-      batch.delete(inspRef);
+      try {
+        const batch = writeBatch(db!);
+        const inspRef = doc(db!, 'inspections', inspectionId);
+        batch.delete(inspRef);
 
-      const itemsSnap = await getDocs(
-        query(collection(db!, 'inspection_items'), where('inspectionId', '==', inspectionId))
-      );
-      itemsSnap.docs.forEach((d) => {
-        batch.delete(doc(db!, 'inspection_items', d.id));
-      });
+        const itemsSnap = await getDocs(
+          query(collection(db!, 'inspection_items'), where('inspectionId', '==', inspectionId))
+        );
+        itemsSnap.docs.forEach((d) => {
+          batch.delete(doc(db!, 'inspection_items', d.id));
+        });
 
-      await batch.commit();
-      return;
+        await batch.commit();
+        return;
+      } catch (error: any) {
+        console.error('Failed to delete inspection in Firestore:', error);
+        if (
+          error?.code === 'permission-denied' ||
+          error?.message?.includes('insufficient permissions') ||
+          error?.message?.includes('Missing or insufficient permissions')
+        ) {
+          throw new Error(
+            'Anda tidak memiliki izin untuk menghapus pemeriksaan ini. Hanya petugas yang membuat pemeriksaan atau Administrator yang dapat menghapusnya.'
+          );
+        }
+        throw error;
+      }
     }
 
     // Offline / LocalStorage Fallback

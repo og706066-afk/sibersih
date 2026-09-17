@@ -238,8 +238,40 @@ export const InspectionsPage: React.FC = () => {
     }
   };
 
+  // Helper: Mengecek apakah pengguna berhak mengubah/menghapus inspeksi ini
+  // Sesuai prinsip RBAC: Admin berhak penuh, Cleaner HANYA jika currentUser.role === 'cleaner' DAN inspection.inspectorId === currentUser.uid
+  const canModifyInspection = (insp: Inspection): boolean => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'admin') return true;
+    if (
+      currentUser.role === 'cleaner' &&
+      Boolean(insp.inspectorId) &&
+      Boolean(currentUser.uid) &&
+      insp.inspectorId === currentUser.uid
+    ) {
+      return true;
+    }
+    return false;
+  };
+
+  // Helper: Mendapatkan sanksi denda terkait inspeksi via relasi violationId
+  const getLinkedInspectionPenalties = (inspectionId: string): Penalty[] => {
+    const linkedViolations = violations.filter((v) => v.inspectionId === inspectionId);
+    const linkedViolationIds = new Set(linkedViolations.map((v) => v.id));
+    return penalties.filter(
+      (p) => linkedViolationIds.has(p.violationId) || (p as any).inspectionId === inspectionId
+    );
+  };
+
   const handleOpenEditModal = async (insp: Inspection, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!canModifyInspection(insp)) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Anda tidak memiliki izin untuk mengedit pemeriksaan ini. Hanya petugas yang membuat pemeriksaan atau Administrator yang dapat mengeditnya.',
+      });
+      return;
+    }
     setEditingInspection(insp);
     setEditAreaId(insp.areaId);
     setEditInspectionDate(insp.date);
@@ -294,6 +326,17 @@ export const InspectionsPage: React.FC = () => {
   const handleUpdateInspection = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingInspection || !editAreaId || isUpdating) return;
+
+    if (!canModifyInspection(editingInspection)) {
+      const deniedMsg =
+        'Anda tidak memiliki izin untuk mengubah pemeriksaan ini. Hanya petugas yang membuat pemeriksaan atau Administrator yang dapat mengubahnya.';
+      setEditModalError(deniedMsg);
+      setFeedbackMessage({
+        type: 'error',
+        text: deniedMsg,
+      });
+      return;
+    }
 
     setIsUpdating(true);
     setEditModalError(null);
@@ -364,12 +407,36 @@ export const InspectionsPage: React.FC = () => {
 
   const handleOpenDeleteModal = (insp: Inspection, e: React.MouseEvent) => {
     e.stopPropagation();
+    if (!canModifyInspection(insp)) {
+      setFeedbackMessage({
+        type: 'error',
+        text: 'Anda tidak memiliki izin untuk menghapus pemeriksaan ini. Hanya petugas yang membuat pemeriksaan atau Administrator yang dapat menghapusnya.',
+      });
+      return;
+    }
     setDeletingInspection(insp);
     setDeleteModalError(null);
   };
 
   const handleConfirmDelete = async () => {
     if (!deletingInspection || isDeleting) return;
+
+    if (!canModifyInspection(deletingInspection)) {
+      setDeleteModalError(
+        'Anda tidak memiliki izin untuk menghapus pemeriksaan ini. Hanya petugas yang membuat pemeriksaan atau Administrator yang dapat menghapusnya.'
+      );
+      return;
+    }
+
+    const linkedPenalties = getLinkedInspectionPenalties(deletingInspection.id);
+    const hasPaidPenalty = linkedPenalties.some((p) => p.status === 'paid');
+
+    if (hasPaidPenalty) {
+      setDeleteModalError(
+        'Pemeriksaan tidak dapat dihapus karena memiliki transaksi denda yang sudah dibayar dan tercatat dalam pembukuan kas.'
+      );
+      return;
+    }
 
     setIsDeleting(true);
     setDeleteModalError(null);
@@ -385,7 +452,15 @@ export const InspectionsPage: React.FC = () => {
       await loadData();
     } catch (err: any) {
       console.error('Failed to delete inspection', err);
-      const errorMsg = err?.message || 'Gagal menghapus data pemeriksaan.';
+      let errorMsg = err?.message || 'Gagal menghapus data pemeriksaan.';
+      if (
+        errorMsg.includes('Missing or insufficient permissions') ||
+        errorMsg.includes('insufficient permissions') ||
+        errorMsg.includes('permission-denied')
+      ) {
+        errorMsg =
+          'Anda tidak memiliki izin untuk menghapus pemeriksaan ini. Hanya petugas yang membuat pemeriksaan atau Administrator yang dapat menghapusnya.';
+      }
       setDeleteModalError(errorMsg);
       setFeedbackMessage({
         type: 'error',
@@ -716,7 +791,7 @@ export const InspectionsPage: React.FC = () => {
                   <div className="text-[11px] text-slate-400">Pemeriksaan selesai</div>
                 )}
 
-                {currentUser?.role === 'cleaner' && (
+                {canModifyInspection(insp) && (
                   <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                     <button
                       type="button"
@@ -1285,18 +1360,45 @@ export const InspectionsPage: React.FC = () => {
             </div>
 
             {/* Check for Linked Violations / Penalties */}
-            {violations.some((v) => v.inspectionId === deletingInspection.id || penalties.some((p) => p.violationId === v.id && v.inspectionId === deletingInspection.id)) && (
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
-                <div className="flex items-center gap-1.5 font-bold text-amber-800">
-                  <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>Catatan Relasi Pelanggaran & Kas Denda</span>
-                </div>
-                <p className="text-amber-700 leading-relaxed">
-                  Pemeriksaan ini memiliki catatan temuan pelanggaran / sanksi denda yang pernah diterbitkan.
-                  Menghapus pemeriksaan ini <strong>tidak akan menghapus catatan pelanggaran atau bukti kuitansi denda</strong> demi menjaga integritas data audit dan pembukuan kas.
-                </p>
-              </div>
-            )}
+            {(() => {
+              const linkedPenalties = getLinkedInspectionPenalties(deletingInspection.id);
+              const hasPaidPenalty = linkedPenalties.some((p) => p.status === 'paid');
+              const hasLinkedViolationsOrPenalties =
+                violations.some((v) => v.inspectionId === deletingInspection.id) ||
+                linkedPenalties.length > 0;
+
+              if (hasPaidPenalty) {
+                return (
+                  <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 text-xs text-rose-900 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-rose-800">
+                      <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                      <span>Penghapusan Diblokir: Sanksi Denda Sudah Lunas</span>
+                    </div>
+                    <p className="text-rose-700 leading-relaxed">
+                      Pemeriksaan ini memiliki transaksi sanksi denda yang telah lunas/dibayar dengan bukti penerimaan kuitansi kas resmi.
+                      Demi menjaga integritas pembukuan kas dan jejak audit (audit trail), <strong>pemeriksaan ini tidak dapat dihapus</strong>.
+                    </p>
+                  </div>
+                );
+              }
+
+              if (hasLinkedViolationsOrPenalties) {
+                return (
+                  <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                    <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>Catatan Relasi Pelanggaran & Kas Denda</span>
+                    </div>
+                    <p className="text-amber-700 leading-relaxed">
+                      Pemeriksaan ini memiliki catatan temuan pelanggaran / sanksi denda yang pernah diterbitkan.
+                      Menghapus pemeriksaan ini <strong>tidak akan menghapus catatan pelanggaran atau bukti kuitansi denda</strong> demi menjaga integritas data audit dan pembukuan kas.
+                    </p>
+                  </div>
+                );
+              }
+
+              return null;
+            })()}
 
             {deleteModalError && (
               <div className="p-3 bg-rose-50 text-rose-700 rounded-xl text-xs border border-rose-200 flex items-start gap-2 animate-in fade-in">
@@ -1308,25 +1410,34 @@ export const InspectionsPage: React.FC = () => {
               </div>
             )}
 
-            <div className="pt-2 flex items-center justify-end gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setDeletingInspection(null)}
-                disabled={isDeleting}
-              >
-                Batal
-              </Button>
-              <Button
-                type="button"
-                variant="danger"
-                isLoading={isDeleting}
-                disabled={isDeleting}
-                onClick={handleConfirmDelete}
-              >
-                Hapus Pemeriksaan
-              </Button>
-            </div>
+            {(() => {
+              const linkedPenalties = getLinkedInspectionPenalties(deletingInspection.id);
+              const hasPaidPenalty = linkedPenalties.some((p) => p.status === 'paid');
+
+              return (
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setDeletingInspection(null)}
+                    disabled={isDeleting}
+                  >
+                    {hasPaidPenalty ? 'Tutup' : 'Batal'}
+                  </Button>
+                  {!hasPaidPenalty && (
+                    <Button
+                      type="button"
+                      variant="danger"
+                      isLoading={isDeleting}
+                      disabled={isDeleting}
+                      onClick={handleConfirmDelete}
+                    >
+                      Hapus Pemeriksaan
+                    </Button>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         )}
       </Modal>

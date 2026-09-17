@@ -16,6 +16,7 @@ export interface UserProfile {
   role: UserRole;
   phoneNumber?: string;
   avatarUrl?: string;
+  photoURL?: string;
   isActive: boolean;
   createdAt: string; // ISO 8601 string or Firestore Timestamp
   updatedAt: string;

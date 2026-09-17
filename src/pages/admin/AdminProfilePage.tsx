@@ -1,9 +1,9 @@
 import React from 'react';
-import { User, Mail, Phone, ShieldCheck, LogOut, Key } from 'lucide-react';
+import { Mail, Phone, ShieldCheck, LogOut, Key } from 'lucide-react';
 
 import { Card, Button, Badge } from '../../components/common';
 import { useAuth } from '../../contexts/AuthContext';
-import { ChangePasswordCard } from '../../components/profile/ChangePasswordCard';
+import { ChangePasswordCard, ProfileAvatarUploader } from '../../components/profile';
 
 export const AdminProfilePage: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -12,9 +12,7 @@ export const AdminProfilePage: React.FC = () => {
     <div className="space-y-4">
       {/* Profile Card */}
       <Card className="p-5 bg-white text-center flex flex-col items-center">
-        <div className="w-20 h-20 rounded-full bg-slate-900 border-2 border-slate-700 text-indigo-400 flex items-center justify-center mb-3 shadow-xs">
-          <User className="w-10 h-10" />
-        </div>
+        <ProfileAvatarUploader fallbackVariant="admin" />
         <h2 className="text-base font-bold text-slate-900">{currentUser?.displayName || 'Administrator'}</h2>
         <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email}</p>
         <div className="mt-2.5">

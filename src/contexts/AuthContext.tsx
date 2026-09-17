@@ -6,10 +6,11 @@ import {
   signOut as firebaseSignOut,
   createUserWithEmailAndPassword,
   updatePassword as firebaseUpdatePassword,
+  updateProfile,
   onAuthStateChanged,
   type User as FirebaseUser,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../config/firebase';
 import type { UserProfile, UserRole } from '../types';
 
@@ -52,7 +53,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return;
             }
 
-            setCurrentUser(profile);
+            const mergedProfile: UserProfile = {
+              ...profile,
+              photoURL: profile.photoURL || profile.avatarUrl || user.photoURL || undefined,
+              avatarUrl: profile.avatarUrl || profile.photoURL || user.photoURL || undefined,
+            };
+            setCurrentUser(mergedProfile);
           } else {
             // Pengguna Auth ada tetapi profil Firestore tidak ditemukan (belum diprovision Admin)
             console.warn('[SIBERSIH Auth] Dokumen /users/{uid} tidak ditemukan di Firestore. Akses ditolak.');
@@ -108,8 +114,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setFirebaseUser(null);
         throw new Error('Akun Anda sedang dinonaktifkan oleh Administrator.');
       }
-      setCurrentUser(profile);
-      return profile;
+      const mergedProfile: UserProfile = {
+        ...profile,
+        photoURL: profile.photoURL || profile.avatarUrl || userCredential.user.photoURL || undefined,
+        avatarUrl: profile.avatarUrl || profile.photoURL || userCredential.user.photoURL || undefined,
+      };
+      setCurrentUser(mergedProfile);
+      return mergedProfile;
     }
 
     // Dokumen /users/{uid} TIDAK ditemukan di Firestore:
@@ -168,6 +179,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await firebaseUpdatePassword(auth.currentUser, newPassword);
   };
 
+  const updateProfilePhoto = async (photoURL: string): Promise<void> => {
+    if (auth?.currentUser) {
+      await updateProfile(auth.currentUser, { photoURL });
+    }
+
+    if (isFirebaseConfigured && db && currentUser?.uid) {
+      try {
+        const userDocRef = doc(db, 'users', currentUser.uid);
+        await updateDoc(userDocRef, {
+          photoURL,
+          avatarUrl: photoURL,
+          updatedAt: new Date().toISOString(),
+        });
+      } catch (err) {
+        console.warn('Failed to update photoURL in Firestore users doc:', err);
+      }
+    }
+
+    setCurrentUser((prev) => (prev ? { ...prev, photoURL, avatarUrl: photoURL } : null));
+    if (auth?.currentUser) {
+      setFirebaseUser(auth.currentUser);
+    }
+  };
+
   const logout = async (): Promise<void> => {
     if (auth && isFirebaseConfigured) {
       await firebaseSignOut(auth);
@@ -197,6 +232,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         register,
         changePassword,
+        updateProfilePhoto,
         logout,
         switchDemoRole,
       }}

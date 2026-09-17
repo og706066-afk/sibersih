@@ -60,6 +60,9 @@ export const AppShell: React.FC = () => {
     }
   };
 
+  const userFirstName = currentUser.displayName?.trim().split(/\s+/)[0] || 'Profil';
+  const userPhoto = currentUser.photoURL || currentUser.avatarUrl;
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center">
       {/* Desktop simulated mobile frame or wide screen container */}
@@ -111,13 +114,22 @@ export const AppShell: React.FC = () => {
             subtitle={subtitle}
             userRole={currentUser.role}
             actions={
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 <Link
                   to={getProfileLink()}
-                  className="p-1.5 text-slate-500 hover:text-emerald-700 hover:bg-slate-100 rounded-lg transition-colors"
+                  className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 rounded-lg border border-slate-200 transition-colors"
                   title="Profil Akun & Ganti Password"
                 >
-                  <User className="w-4 h-4" />
+                  {userPhoto ? (
+                    <img
+                      src={userPhoto}
+                      alt={userFirstName}
+                      className="w-4 h-4 rounded-full object-cover shrink-0 border border-emerald-400"
+                    />
+                  ) : (
+                    <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                  )}
+                  <span className="max-w-[75px] sm:max-w-[100px] truncate">{userFirstName}</span>
                 </Link>
                 <button
                   onClick={logout}

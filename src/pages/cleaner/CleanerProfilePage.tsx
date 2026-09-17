@@ -1,9 +1,9 @@
 import React from 'react';
-import { User, Mail, Phone, Sparkles, LogOut, ShieldCheck } from 'lucide-react';
+import { Mail, Phone, Sparkles, LogOut, ShieldCheck } from 'lucide-react';
 
 import { Card, Button, Badge } from '../../components/common';
 import { useAuth } from '../../contexts/AuthContext';
-import { ChangePasswordCard } from '../../components/profile/ChangePasswordCard';
+import { ChangePasswordCard, ProfileAvatarUploader } from '../../components/profile';
 
 export const CleanerProfilePage: React.FC = () => {
   const { currentUser, logout } = useAuth();
@@ -12,9 +12,7 @@ export const CleanerProfilePage: React.FC = () => {
     <div className="space-y-4">
       {/* Profile Card */}
       <Card className="p-5 bg-white text-center flex flex-col items-center">
-        <div className="w-20 h-20 rounded-full bg-emerald-50 border-2 border-emerald-200 text-emerald-600 flex items-center justify-center mb-3 shadow-xs">
-          <User className="w-10 h-10" />
-        </div>
+        <ProfileAvatarUploader fallbackVariant="cleaner" />
         <h2 className="text-base font-bold text-slate-900">{currentUser?.displayName || 'Petugas Kebersihan'}</h2>
         <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email}</p>
         <div className="mt-2.5">

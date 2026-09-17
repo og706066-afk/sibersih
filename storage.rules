@@ -16,12 +16,21 @@ service firebase.storage {
                    && request.resource.contentType.matches('image/.*');
     }
 
-    // User avatars
+    // User profile photos
+    match /profile_photos/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() 
+                   && request.auth.uid == userId
+                   && request.resource.size <= 2 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
+    }
+
+    // User avatars (legacy / fallback path)
     match /avatars/{userId}/{fileName} {
       allow read: if isAuthenticated();
       allow write: if isAuthenticated() 
                    && request.auth.uid == userId
-                   && request.resource.size < 2 * 1024 * 1024
+                   && request.resource.size <= 2 * 1024 * 1024
                    && request.resource.contentType.matches('image/.*');
     }
   }

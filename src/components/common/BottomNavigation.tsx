@@ -36,6 +36,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ role }) => {
           { to: '/cleaner/violations', label: 'Pelanggaran', icon: <AlertTriangle className="w-5 h-5" /> },
           { to: '/cleaner/penalties', label: 'Denda', icon: <Receipt className="w-5 h-5" /> },
           { to: '/cleaner/inventory', label: 'Inventaris', icon: <Boxes className="w-5 h-5" /> },
+          { to: '/cleaner/profile', label: 'Profil', icon: <User className="w-5 h-5" /> },
         ];
       case 'admin':
         return [

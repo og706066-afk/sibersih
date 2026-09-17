@@ -61,7 +61,7 @@ export const AppShell: React.FC = () => {
   };
 
   const userFirstName = currentUser.displayName?.trim().split(/\s+/)[0] || 'Profil';
-  const userPhoto = currentUser.photoURL || currentUser.avatarUrl;
+  const userPhoto = currentUser.avatarUrl;
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col items-center">

@@ -6,7 +6,6 @@ import {
   signOut as firebaseSignOut,
   createUserWithEmailAndPassword,
   updatePassword as firebaseUpdatePassword,
-  updateProfile,
   onAuthStateChanged,
   type User as FirebaseUser,
 } from 'firebase/auth';
@@ -31,7 +30,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // If Firebase is not configured, fall back to default demo cleaner role
     if (!isFirebaseConfigured || !auth || !db) {
       const savedRole = (localStorage.getItem('sibersih_demo_role') as UserRole) || 'cleaner';
-      setCurrentUser(DEMO_PROFILES[savedRole] || DEMO_PROFILES.cleaner);
+      const baseProfile = DEMO_PROFILES[savedRole] || DEMO_PROFILES.cleaner;
+      const savedDemoAvatar = localStorage.getItem(`sibersih_demo_avatar_${savedRole}`);
+      setCurrentUser({
+        ...baseProfile,
+        avatarUrl: savedDemoAvatar || baseProfile.avatarUrl,
+      });
       setIsLoading(false);
       return;
     }
@@ -53,12 +57,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return;
             }
 
-            const mergedProfile: UserProfile = {
+            const loadedProfile: UserProfile = {
               ...profile,
-              photoURL: profile.photoURL || profile.avatarUrl || user.photoURL || undefined,
-              avatarUrl: profile.avatarUrl || profile.photoURL || user.photoURL || undefined,
+              avatarUrl: profile.avatarUrl || undefined,
             };
-            setCurrentUser(mergedProfile);
+            setCurrentUser(loadedProfile);
           } else {
             // Pengguna Auth ada tetapi profil Firestore tidak ditemukan (belum diprovision Admin)
             console.warn('[SIBERSIH Auth] Dokumen /users/{uid} tidak ditemukan di Firestore. Akses ditolak.');
@@ -95,9 +98,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (demoUser.isActive !== true) {
           throw new Error('Akun Anda dinonaktifkan. Hubungi Administrator.');
         }
-        setCurrentUser(demoUser);
+        const savedDemoAvatar = localStorage.getItem(`sibersih_demo_avatar_${foundRole}`);
+        const activeDemoUser: UserProfile = {
+          ...demoUser,
+          avatarUrl: savedDemoAvatar || demoUser.avatarUrl,
+        };
+        setCurrentUser(activeDemoUser);
         localStorage.setItem('sibersih_demo_role', foundRole);
-        return demoUser;
+        return activeDemoUser;
       }
       throw new Error('Email demo tidak cocok. Gunakan salah satu email demo yang tertera.');
     }
@@ -114,13 +122,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setFirebaseUser(null);
         throw new Error('Akun Anda sedang dinonaktifkan oleh Administrator.');
       }
-      const mergedProfile: UserProfile = {
+      const loadedProfile: UserProfile = {
         ...profile,
-        photoURL: profile.photoURL || profile.avatarUrl || userCredential.user.photoURL || undefined,
-        avatarUrl: profile.avatarUrl || profile.photoURL || userCredential.user.photoURL || undefined,
+        avatarUrl: profile.avatarUrl || undefined,
       };
-      setCurrentUser(mergedProfile);
-      return mergedProfile;
+      setCurrentUser(loadedProfile);
+      return loadedProfile;
     }
 
     // Dokumen /users/{uid} TIDAK ditemukan di Firestore:
@@ -179,28 +186,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await firebaseUpdatePassword(auth.currentUser, newPassword);
   };
 
-  const updateProfilePhoto = async (photoURL: string): Promise<void> => {
-    if (auth?.currentUser) {
-      await updateProfile(auth.currentUser, { photoURL });
-    }
-
+  const updateProfilePhoto = async (avatarUrl: string): Promise<void> => {
+    // JANGAN menyimpan base64 data URL ke Firebase Auth (auth.currentUser)
+    // Simpan ke Firestore dokumen /users/{currentUser.uid} pada field avatarUrl
     if (isFirebaseConfigured && db && currentUser?.uid) {
       try {
         const userDocRef = doc(db, 'users', currentUser.uid);
         await updateDoc(userDocRef, {
-          photoURL,
-          avatarUrl: photoURL,
+          avatarUrl,
           updatedAt: new Date().toISOString(),
         });
+      } catch (err: any) {
+        console.error('Failed to update avatarUrl in Firestore users doc:', err);
+        if (
+          err?.code === 'permission-denied' ||
+          err?.message?.includes('insufficient permissions') ||
+          err?.message?.includes('Missing or insufficient permissions')
+        ) {
+          throw new Error('Anda tidak memiliki izin untuk memperbarui foto profil ini.');
+        }
+        throw err;
+      }
+    } else if (!isFirebaseConfigured) {
+      // Demo / offline mode: simpan di localStorage agar tetap muncul setelah refresh
+      try {
+        const demoRole = currentUser?.role || 'cleaner';
+        localStorage.setItem(`sibersih_demo_avatar_${demoRole}`, avatarUrl);
       } catch (err) {
-        console.warn('Failed to update photoURL in Firestore users doc:', err);
+        console.warn('Failed to save demo avatar to localStorage:', err);
       }
     }
 
-    setCurrentUser((prev) => (prev ? { ...prev, photoURL, avatarUrl: photoURL } : null));
-    if (auth?.currentUser) {
-      setFirebaseUser(auth.currentUser);
-    }
+    // Update state currentUser secara reactive agar UI langsung berubah tanpa reload
+    setCurrentUser((prev) => (prev ? { ...prev, avatarUrl } : null));
   };
 
   const logout = async (): Promise<void> => {
@@ -218,7 +236,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     localStorage.setItem('sibersih_demo_role', role);
-    setCurrentUser(DEMO_PROFILES[role]);
+    const baseProfile = DEMO_PROFILES[role];
+    const savedDemoAvatar = localStorage.getItem(`sibersih_demo_avatar_${role}`);
+    setCurrentUser({
+      ...baseProfile,
+      avatarUrl: savedDemoAvatar || baseProfile.avatarUrl,
+    });
   };
 
 

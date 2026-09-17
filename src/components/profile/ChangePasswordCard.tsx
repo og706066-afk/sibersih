@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Lock, Eye, EyeOff, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
 import { Card, Button } from '../common';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -64,7 +64,7 @@ export const ChangePasswordCard: React.FC = () => {
   return (
     <Card className="p-4 bg-white space-y-3">
       <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
-        <Lock className="w-4 h-4 text-emerald-600" />
+        <KeyRound className="w-4 h-4 text-emerald-600" />
         <div>
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">
             Ubah Kata Sandi Akun

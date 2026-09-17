@@ -4,13 +4,23 @@ import {
   ShieldCheck,
   RotateCcw,
   Cloud,
+  Mail,
+  Phone,
+  Key,
+  Settings,
 } from 'lucide-react';
 import { Card, Button, Badge } from '../../components/common';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  ProfileAvatarUploader,
+  ChangePasswordCard,
+  LogoutActionCard,
+} from '../../components/profile';
 import { isFirebaseConfigured } from '../../config/firebase';
 
 export const AdminSettingsPage: React.FC = () => {
+  const { currentUser } = useAuth();
   const [resetSuccess, setResetSuccess] = useState(false);
-
 
   const handleResetLocalData = () => {
     const keysToRemove = [
@@ -37,13 +47,81 @@ export const AdminSettingsPage: React.FC = () => {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h2 className="text-base font-bold text-slate-900">Pengaturan Sistem</h2>
-        <p className="text-xs text-slate-500">Konfigurasi arsitektur, Firebase, dan Android</p>
+      {/* Header Pengaturan */}
+      <div className="flex items-center gap-2.5">
+        <div className="p-2 rounded-xl bg-slate-900 text-indigo-400 border border-slate-800 shrink-0">
+          <Settings className="w-5 h-5" />
+        </div>
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Pengaturan</h2>
+          <p className="text-xs text-slate-500">Kelola akun dan preferensi sistem SIBERSIH</p>
+        </div>
+      </div>
+
+      {/* Bagian Akun / User: Profil Card */}
+      <Card className="p-5 bg-white text-center flex flex-col items-center shadow-xs">
+        <ProfileAvatarUploader fallbackVariant="admin" />
+        <h2 className="text-base font-bold text-slate-900">
+          {currentUser?.displayName || 'Administrator'}
+        </h2>
+        <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email}</p>
+        <div className="mt-2.5">
+          <Badge variant="info" size="md">
+            Developer / Admin
+          </Badge>
+        </div>
+      </Card>
+
+      {/* Rincian Informasi Akun */}
+      <Card className="p-4 bg-white space-y-3 shadow-xs">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+          Informasi Akun
+        </h3>
+
+        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+          <Mail className="w-4 h-4 text-slate-400 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <span className="text-[11px] text-slate-400 block">Email Pengguna</span>
+            <span className="font-medium text-slate-800 truncate block">{currentUser?.email}</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+          <Phone className="w-4 h-4 text-slate-400 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <span className="text-[11px] text-slate-400 block">Nomor WhatsApp</span>
+            <span className="font-medium text-slate-800 truncate block">
+              {currentUser?.phoneNumber || '0811-9876-5432'}
+            </span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+          <Key className="w-4 h-4 text-slate-400 shrink-0" />
+          <div className="min-w-0 flex-1">
+            <span className="text-[11px] text-slate-400 block">Otoritas Sistem</span>
+            <span className="font-medium text-slate-800 truncate block">
+              Super Administrator & Data Controller
+            </span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Bagian Ganti Password */}
+      <ChangePasswordCard />
+
+      {/* Bagian Aksi Keluar */}
+      <LogoutActionCard />
+
+      {/* Pembatas Pengaturan Sistem */}
+      <div className="pt-2">
+        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 px-1">
+          Preferensi Sistem & Konfigurasi
+        </h3>
       </div>
 
       {/* Tech Stack Specs Card */}
-      <Card className="p-4 bg-white space-y-3">
+      <Card className="p-4 bg-white space-y-3 shadow-xs">
         <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
           <ShieldCheck className="w-4 h-4 text-emerald-600" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
@@ -58,7 +136,7 @@ export const AdminSettingsPage: React.FC = () => {
           </div>
           <div className="flex justify-between py-1 border-b border-slate-50">
             <span className="text-slate-500">Mobile Hybrid Engine</span>
-            <span className="font-semibold text-slate-800">Capacitor 6 (Android Ready)</span>
+            <span className="font-semibold text-slate-800">Capacitor 8 (Android Ready)</span>
           </div>
           <div className="flex justify-between py-1 border-b border-slate-50">
             <span className="text-slate-500">Database Utama</span>
@@ -69,14 +147,14 @@ export const AdminSettingsPage: React.FC = () => {
             <span className="font-semibold text-slate-800">Firebase Auth + Custom Profiles</span>
           </div>
           <div className="flex justify-between py-1 border-b border-slate-50">
-            <span className="text-slate-500">Storage Bukti Foto</span>
-            <span className="font-semibold text-slate-800">Firebase Cloud Storage</span>
+            <span className="text-slate-500">Penyimpanan Avatar</span>
+            <span className="font-semibold text-slate-800">Firestore Document Base64</span>
           </div>
         </div>
       </Card>
 
       {/* Firebase Status */}
-      <Card className="p-4 bg-white space-y-3">
+      <Card className="p-4 bg-white space-y-3 shadow-xs">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <Cloud className="w-4 h-4 text-indigo-600" />
@@ -103,7 +181,7 @@ export const AdminSettingsPage: React.FC = () => {
       </Card>
 
       {/* Android Capacitor Spec */}
-      <Card className="p-4 bg-white space-y-2 text-xs">
+      <Card className="p-4 bg-white space-y-2 text-xs shadow-xs">
         <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
           <Smartphone className="w-4 h-4 text-sky-600" />
           <h3 className="text-xs font-bold uppercase tracking-wider text-slate-600">
@@ -121,7 +199,7 @@ export const AdminSettingsPage: React.FC = () => {
       </Card>
 
       {/* Reset Cache for Demo */}
-      <Card className="p-4 bg-white border-rose-100 space-y-3">
+      <Card className="p-4 bg-white border-rose-100 space-y-3 shadow-xs">
         <div>
           <h4 className="text-xs font-bold text-rose-900">Reset Data Demo ke Kondisi Awal</h4>
           <p className="text-[11px] text-slate-500 mt-0.5">

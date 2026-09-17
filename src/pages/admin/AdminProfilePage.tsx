@@ -1,12 +1,12 @@
 import React from 'react';
-import { Mail, Phone, ShieldCheck, LogOut, Key } from 'lucide-react';
+import { Mail, Phone, ShieldCheck, Key } from 'lucide-react';
 
-import { Card, Button, Badge } from '../../components/common';
+import { Card, Badge } from '../../components/common';
 import { useAuth } from '../../contexts/AuthContext';
-import { ChangePasswordCard, ProfileAvatarUploader } from '../../components/profile';
+import { ChangePasswordCard, ProfileAvatarUploader, LogoutActionCard } from '../../components/profile';
 
 export const AdminProfilePage: React.FC = () => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
 
   return (
     <div className="space-y-4">
@@ -69,16 +69,8 @@ export const AdminProfilePage: React.FC = () => {
       {/* Change Password Card */}
       <ChangePasswordCard />
 
-      {/* Logout */}
-      <Button
-        variant="outline"
-        size="md"
-        className="w-full text-rose-600 border-rose-200 hover:bg-rose-50"
-        leftIcon={<LogOut className="w-4 h-4" />}
-        onClick={logout}
-      >
-        Keluar dari SIBERSIH
-      </Button>
+      {/* Logout Action */}
+      <LogoutActionCard />
     </div>
   );
 };

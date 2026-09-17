@@ -6,7 +6,7 @@ import { Cloud, CloudOff, User } from 'lucide-react';
 import type { UserRole } from '../types';
 
 export const AppShell: React.FC = () => {
-  const { currentUser, isFirebaseActive, switchDemoRole, logout } = useAuth();
+  const { currentUser, isFirebaseActive, switchDemoRole } = useAuth();
   const location = useLocation();
 
   if (!currentUser) {
@@ -20,7 +20,7 @@ export const AppShell: React.FC = () => {
       if (path.includes('/violations')) return { title: 'Daftar Pelanggaran', subtitle: 'Catatan & bukti ketidakbersihan' };
       if (path.includes('/penalties')) return { title: 'Manajemen Denda', subtitle: 'Pelunasan sanksi kebersihan' };
       if (path.includes('/inventory')) return { title: 'Inventaris Kebersihan', subtitle: 'Stok alat & bahan pembersih' };
-      if (path.includes('/profile')) return { title: 'Profil Petugas', subtitle: 'Informasi akun kebersihan & keamanan' };
+      if (path.includes('/profile')) return { title: 'Pengaturan & Profil', subtitle: 'Kelola akun dan preferensi' };
       return { title: 'SIBERSIH Petugas', subtitle: 'Sistem Informasi Kebersihan' };
     }
 
@@ -28,7 +28,7 @@ export const AppShell: React.FC = () => {
       if (path.includes('/history')) return { title: 'Riwayat Kelas', subtitle: 'Log kebersihan ruang kelas' };
       if (path.includes('/violations')) return { title: 'Pelanggaran Kelas', subtitle: 'Catatan denda & sanksi' };
       if (path.includes('/reports')) return { title: 'Laporan & Rekapitulasi', subtitle: 'Rekapitulasi kelas & cetak dokumen' };
-      if (path.includes('/profile')) return { title: 'Profil Ustadz/ah', subtitle: 'Informasi akun pendidik & keamanan' };
+      if (path.includes('/profile')) return { title: 'Pengaturan & Profil', subtitle: 'Kelola akun dan preferensi' };
       return { title: 'Monitoring Kebersihan', subtitle: 'Pantauan Ruang Kelas Santri' };
     }
 
@@ -38,8 +38,8 @@ export const AppShell: React.FC = () => {
       if (path.includes('/penalties')) return { title: 'Monitoring Denda & Kas', subtitle: 'Pencatatan & rekapitulasi kas denda' };
       if (path.includes('/reports')) return { title: 'Laporan & Rekapitulasi', subtitle: 'Rekap kebersihan, pelanggaran & kas denda' };
       if (path.includes('/violations')) return { title: 'Aturan & Pelanggaran', subtitle: 'Konfigurasi jenis denda' };
-      if (path.includes('/settings')) return { title: 'Pengaturan Sistem', subtitle: 'Konfigurasi Firebase & database' };
-      if (path.includes('/profile')) return { title: 'Profil Administrator', subtitle: 'Pengaturan akun & hak akses' };
+      if (path.includes('/settings')) return { title: 'Pengaturan', subtitle: 'Kelola akun dan preferensi' };
+      if (path.includes('/profile')) return { title: 'Pengaturan & Profil', subtitle: 'Kelola akun dan preferensi' };
       return { title: 'SIBERSIH Admin', subtitle: 'Panel Kontrol & Manajemen' };
     }
 
@@ -51,7 +51,7 @@ export const AppShell: React.FC = () => {
   const getProfileLink = () => {
     switch (currentUser.role) {
       case 'admin':
-        return '/admin/profile';
+        return '/admin/settings';
       case 'teacher':
         return '/teacher/profile';
       case 'cleaner':
@@ -114,31 +114,22 @@ export const AppShell: React.FC = () => {
             subtitle={subtitle}
             userRole={currentUser.role}
             actions={
-              <div className="flex items-center gap-1.5">
-                <Link
-                  to={getProfileLink()}
-                  className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 rounded-lg border border-slate-200 transition-colors"
-                  title="Profil Akun & Ganti Password"
-                >
-                  {userPhoto ? (
-                    <img
-                      src={userPhoto}
-                      alt={userFirstName}
-                      className="w-4 h-4 rounded-full object-cover shrink-0 border border-emerald-400"
-                    />
-                  ) : (
-                    <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  )}
-                  <span className="max-w-[75px] sm:max-w-[100px] truncate">{userFirstName}</span>
-                </Link>
-                <button
-                  onClick={logout}
-                  className="text-xs text-slate-500 hover:text-rose-600 font-medium px-2 py-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-                  title="Keluar"
-                >
-                  Keluar
-                </button>
-              </div>
+              <Link
+                to={getProfileLink()}
+                className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 rounded-lg border border-slate-200 transition-colors"
+                title="Pengaturan Akun & Profil"
+              >
+                {userPhoto ? (
+                  <img
+                    src={userPhoto}
+                    alt={userFirstName}
+                    className="w-4 h-4 rounded-full object-cover shrink-0 border border-emerald-400"
+                  />
+                ) : (
+                  <User className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                )}
+                <span className="max-w-[75px] sm:max-w-[100px] truncate">{userFirstName}</span>
+              </Link>
             }
           />
         </div>

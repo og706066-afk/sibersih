@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Phone, GraduationCap, LogOut, ShieldCheck } from 'lucide-react';
+import { Mail, Phone, GraduationCap, ShieldCheck, Settings } from 'lucide-react';
 
-import { Card, Button, Badge } from '../../components/common';
+import { Card, Badge } from '../../components/common';
 import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../services/dataService';
-import { ChangePasswordCard, ProfileAvatarUploader } from '../../components/profile';
+import {
+  ChangePasswordCard,
+  ProfileAvatarUploader,
+  LogoutActionCard,
+} from '../../components/profile';
 
 export const TeacherProfilePage: React.FC = () => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const [assignedClassName, setAssignedClassName] = useState<string>('Memuat kelas...');
 
   useEffect(() => {
@@ -30,10 +34,23 @@ export const TeacherProfilePage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      {/* Header Pengaturan & Profil */}
+      <div className="flex items-center gap-2.5">
+        <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 shrink-0">
+          <Settings className="w-5 h-5" />
+        </div>
+        <div>
+          <h2 className="text-base font-bold text-slate-900">Pengaturan & Profil</h2>
+          <p className="text-xs text-slate-500">Kelola akun dan preferensi pembina</p>
+        </div>
+      </div>
+
       {/* Profile Card */}
-      <Card className="p-5 bg-white text-center flex flex-col items-center">
+      <Card className="p-5 bg-white text-center flex flex-col items-center shadow-xs">
         <ProfileAvatarUploader fallbackVariant="teacher" />
-        <h2 className="text-base font-bold text-slate-900">{currentUser?.displayName || 'Ustadz Pembina'}</h2>
+        <h2 className="text-base font-bold text-slate-900">
+          {currentUser?.displayName || 'Ustadz Pembina'}
+        </h2>
         <p className="text-xs text-slate-500 mt-0.5">{currentUser?.email}</p>
         <div className="mt-2.5">
           <Badge variant="info" size="md">
@@ -43,7 +60,7 @@ export const TeacherProfilePage: React.FC = () => {
       </Card>
 
       {/* Account Info */}
-      <Card className="p-4 bg-white space-y-3">
+      <Card className="p-4 bg-white space-y-3 shadow-xs">
         <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
           Informasi Akun
         </h3>
@@ -82,23 +99,17 @@ export const TeacherProfilePage: React.FC = () => {
           <span>Hak Akses Akun: Read-Only Monitoring</span>
         </div>
         <p className="text-[11px] leading-relaxed">
-          Akun Ustadz/Ustadzah memiliki izin untuk memonitor hasil inspeksi kebersihan ruang kelas santri, menerima laporan temuan pelanggaran piket, serta mencetak laporan kebersihan kelas.
+          Akun Ustadz/Ustadzah memiliki izin untuk memonitor hasil inspeksi kebersihan ruang kelas
+          santri, menerima laporan temuan pelanggaran piket, serta mencetak laporan kebersihan
+          kelas.
         </p>
       </div>
 
       {/* Change Password Card */}
       <ChangePasswordCard />
 
-      {/* Logout */}
-      <Button
-        variant="outline"
-        size="md"
-        className="w-full text-rose-600 border-rose-200 hover:bg-rose-50"
-        leftIcon={<LogOut className="w-4 h-4" />}
-        onClick={logout}
-      >
-        Keluar dari SIBERSIH
-      </Button>
+      {/* Logout Action Card with Confirmation Dialog */}
+      <LogoutActionCard />
     </div>
   );
 };

@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Plus, Mail, Phone, Lock, Eye, EyeOff, AlertCircle, CheckCircle } from 'lucide-react';
 
 import { Card, Button, Badge, Modal, Input, Select, LoadingState } from '../../components/common';
+import { useAuth } from '../../contexts/AuthContext';
 import { DataService } from '../../services/dataService';
 import type { UserProfile, UserRole } from '../../types';
 
 export const AdminUsersPage: React.FC = () => {
+  const { hasRole } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -143,6 +146,21 @@ export const AdminUsersPage: React.FC = () => {
           Tambah Akun
         </Button>
       </div>
+
+      {/* Tab Navigasi Khusus Super Admin */}
+      {hasRole('superadmin') && (
+        <div className="flex border-b border-slate-200">
+          <span className="py-2 px-3 text-xs font-bold text-indigo-700 border-b-2 border-indigo-600">
+            Akun Pengguna
+          </span>
+          <Link
+            to="/admin/users/roles"
+            className="py-2 px-3 text-xs font-semibold text-slate-500 hover:text-purple-700 border-b-2 border-transparent transition-colors flex items-center gap-1"
+          >
+            <span>👑</span> Manajemen Role
+          </Link>
+        </div>
+      )}
 
       {/* Global Feedback Banner */}
       {feedbackMessage && (

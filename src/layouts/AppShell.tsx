@@ -1,13 +1,39 @@
-import React from 'react';
-import { Outlet, useLocation, Link } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Outlet, useLocation, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { TopBar, BottomNavigation } from '../components/common';
-import { Cloud, CloudOff, User } from 'lucide-react';
+import { Cloud, CloudOff, User, ChevronDown } from 'lucide-react';
 import type { UserRole } from '../types';
 
 export const AppShell: React.FC = () => {
-  const { currentUser, isFirebaseActive, switchDemoRole } = useAuth();
+  const { currentUser, isFirebaseActive, switchDemoRole, activeRole, setActiveRole } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Sinkronisasi otomatis activeRole jika pengguna multi-role menavigasi via URL langsung
+  useEffect(() => {
+    if (!currentUser) return;
+    const path = location.pathname;
+    const userRoles = currentUser.roles || [currentUser.role];
+
+    if (path.startsWith('/admin/users/roles') && userRoles.includes('superadmin') && activeRole !== 'superadmin') {
+      setActiveRole('superadmin');
+    } else if (path.startsWith('/teacher') && userRoles.includes('teacher') && activeRole !== 'teacher') {
+      setActiveRole('teacher');
+    } else if (path.startsWith('/cleaner') && userRoles.includes('cleaner') && activeRole !== 'cleaner') {
+      setActiveRole('cleaner');
+    } else if (
+      path.startsWith('/admin') &&
+      (userRoles.includes('admin') || userRoles.includes('superadmin')) &&
+      activeRole !== 'admin' &&
+      activeRole !== 'superadmin'
+    ) {
+      const adminRole = currentUser.role && (currentUser.role === 'admin' || currentUser.role === 'superadmin')
+        ? currentUser.role
+        : userRoles.includes('admin') ? 'admin' : 'superadmin';
+      setActiveRole(adminRole);
+    }
+  }, [location.pathname, currentUser, activeRole, setActiveRole]);
 
   if (!currentUser) {
     return <Outlet />;
@@ -33,6 +59,7 @@ export const AppShell: React.FC = () => {
     }
 
     if (path.startsWith('/admin')) {
+      if (path.includes('/users/roles')) return { title: 'Manajemen Role', subtitle: 'Kelola peran & hak akses pengguna' };
       if (path.includes('/users')) return { title: 'Manajemen Pengguna', subtitle: 'Pengaturan akun & peran' };
       if (path.includes('/areas')) return { title: 'Area & Kelas', subtitle: 'Master data lokasi pesantren' };
       if (path.includes('/penalties')) return { title: 'Monitoring Denda & Kas', subtitle: 'Pencatatan & rekapitulasi kas denda' };
@@ -48,8 +75,65 @@ export const AppShell: React.FC = () => {
 
   const { title, subtitle } = getPageTitle();
 
+  const getRoleLabel = (role: UserRole): string => {
+    switch (role) {
+      case 'superadmin':
+        return '👑 Super Admin';
+      case 'admin':
+        return '🛠️ Developer/Admin';
+      case 'teacher':
+        return '👨‍🏫 Ustadz/Ustadzah';
+      case 'cleaner':
+        return '🧹 Bagian Kebersihan';
+      default:
+        return role;
+    }
+  };
+
+  const getRoleBadgeText = (role: UserRole): string => {
+    switch (role) {
+      case 'superadmin':
+        return 'Super Admin';
+      case 'admin':
+        return 'Developer/Admin';
+      case 'teacher':
+        return 'Ustadz/Ustadzah';
+      case 'cleaner':
+      default:
+        return 'Bagian Kebersihan';
+    }
+  };
+
+  const handleSwitchActiveRole = (newRole: UserRole) => {
+    setActiveRole(newRole);
+    switch (newRole) {
+      case 'superadmin':
+        if (!location.pathname.startsWith('/admin')) {
+          navigate('/admin');
+        }
+        break;
+      case 'admin':
+        if (!location.pathname.startsWith('/admin') || location.pathname.startsWith('/admin/users/roles')) {
+          navigate('/admin');
+        }
+        break;
+      case 'teacher':
+        if (!location.pathname.startsWith('/teacher')) {
+          navigate('/teacher');
+        }
+        break;
+      case 'cleaner':
+      default:
+        if (!location.pathname.startsWith('/cleaner')) {
+          navigate('/cleaner');
+        }
+        break;
+    }
+  };
+
   const getProfileLink = () => {
-    switch (currentUser.role) {
+    switch (activeRole) {
+      case 'superadmin':
       case 'admin':
         return '/admin/settings';
       case 'teacher':
@@ -84,13 +168,28 @@ export const AppShell: React.FC = () => {
           <div className="flex items-center gap-1.5">
             <span className="text-slate-400 text-[11px]">Role:</span>
             {isFirebaseActive ? (
-              <span className="bg-slate-800 text-emerald-300 rounded px-2 py-0.5 text-xs border border-slate-700 font-medium">
-                {currentUser.role === 'admin'
-                  ? 'Developer/Admin'
-                  : currentUser.role === 'teacher'
-                  ? 'Ustadz/Ustadzah'
-                  : 'Bagian Kebersihan'}
-              </span>
+              currentUser.roles && currentUser.roles.length > 1 ? (
+                <div className="relative flex items-center">
+                  <select
+                    value={activeRole}
+                    onChange={(e) => handleSwitchActiveRole(e.target.value as UserRole)}
+                    className="bg-slate-800 text-emerald-300 hover:bg-slate-750 font-medium rounded-md pl-2 pr-6 py-0.5 text-xs border border-emerald-500/40 focus:border-emerald-400 focus:ring-1 focus:ring-emerald-400 focus:outline-none cursor-pointer appearance-none transition-colors"
+                    aria-label="Pilih Peran Aktif"
+                    title="Klik untuk beralih peran aktif"
+                  >
+                    {currentUser.roles.map((r) => (
+                      <option key={r} value={r} className="bg-slate-900 text-slate-200">
+                        {getRoleLabel(r)}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="w-3.5 h-3.5 text-emerald-400 pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2" />
+                </div>
+              ) : (
+                <span className="bg-slate-800 text-emerald-300 rounded px-2 py-0.5 text-xs border border-slate-700 font-medium">
+                  {getRoleBadgeText(activeRole)}
+                </span>
+              )
             ) : (
               <select
                 value={currentUser.role}
@@ -106,13 +205,12 @@ export const AppShell: React.FC = () => {
           </div>
         </div>
 
-
         {/* Top Navigation Bar */}
         <div className="no-print">
           <TopBar
             title={title}
             subtitle={subtitle}
-            userRole={currentUser.role}
+            userRole={activeRole}
             actions={
               <Link
                 to={getProfileLink()}
@@ -141,7 +239,7 @@ export const AppShell: React.FC = () => {
 
         {/* Bottom Navigation */}
         <div className="no-print">
-          <BottomNavigation role={currentUser.role} />
+          <BottomNavigation role={activeRole} />
         </div>
       </div>
     </div>

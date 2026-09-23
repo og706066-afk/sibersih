@@ -22,6 +22,8 @@ export const TopBar: React.FC<TopBarProps> = ({
 }) => {
   const getRoleBadge = (role?: UserRole) => {
     switch (role) {
+      case 'superadmin':
+        return <Badge variant="info" size="sm">Super Admin</Badge>;
       case 'admin':
         return <Badge variant="info" size="sm">Admin</Badge>;
       case 'cleaner':

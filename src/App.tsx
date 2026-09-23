@@ -21,9 +21,10 @@ import { TeacherViolationsPage } from './pages/teacher/TeacherViolationsPage';
 import { TeacherReportsPage } from './pages/teacher/TeacherReportsPage';
 import { TeacherProfilePage } from './pages/teacher/TeacherProfilePage';
 
-// Admin Pages
+// Admin & Super Admin Pages
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
+import { SuperAdminUsersPage } from './pages/admin/SuperAdminUsersPage';
 import { AdminAreasPage } from './pages/admin/AdminAreasPage';
 import { AdminViolationsRulesPage } from './pages/admin/AdminViolationsRulesPage';
 import { AdminPenaltiesPage } from './pages/admin/AdminPenaltiesPage';
@@ -32,7 +33,7 @@ import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
 import { AdminProfilePage } from './pages/admin/AdminProfilePage';
 
 const RootRedirect: React.FC = () => {
-  const { currentUser, isLoading } = useAuth();
+  const { currentUser, isLoading, activeRole } = useAuth();
 
   if (isLoading) {
     return <LoadingState message="Memuat aplikasi SIBERSIH..." fullScreen />;
@@ -42,7 +43,8 @@ const RootRedirect: React.FC = () => {
     return <Navigate to="/login" replace />;
   }
 
-  switch (currentUser.role) {
+  switch (activeRole) {
+    case 'superadmin':
     case 'admin':
       return <Navigate to="/admin" replace />;
     case 'teacher':
@@ -69,15 +71,28 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && !allowedRoles.includes(currentUser.role)) {
-    // FIX 1: If role is not allowed, redirect to the user's appropriate role dashboard
-    const fallbackPath =
-      currentUser.role === 'admin'
-        ? '/admin'
-        : currentUser.role === 'teacher'
-        ? '/teacher'
-        : '/cleaner';
-    return <Navigate to={fallbackPath} replace />;
+  if (allowedRoles) {
+    const userRoles: UserRole[] =
+      currentUser.roles && currentUser.roles.length > 0
+        ? currentUser.roles
+        : [currentUser.role];
+
+    const hasAccess = allowedRoles.some((r) => {
+      // Super Admin otomatis mewarisi hak akses ke rute admin
+      if (r === 'admin' && userRoles.includes('superadmin')) return true;
+      return userRoles.includes(r);
+    });
+
+    if (!hasAccess) {
+      // Fallback redirect yang aman ke area yang dimiliki user
+      let fallbackPath = '/cleaner';
+      if (userRoles.includes('superadmin') || userRoles.includes('admin')) {
+        fallbackPath = '/admin';
+      } else if (userRoles.includes('teacher')) {
+        fallbackPath = '/teacher';
+      }
+      return <Navigate to={fallbackPath} replace />;
+    }
   }
 
   return children ? <>{children}</> : <Outlet />;
@@ -119,6 +134,11 @@ export function App() {
               <Route path="/teacher/violations" element={<TeacherViolationsPage />} />
               <Route path="/teacher/reports" element={<TeacherReportsPage />} />
               <Route path="/teacher/profile" element={<TeacherProfilePage />} />
+            </Route>
+
+            {/* Super Admin Route Guard */}
+            <Route element={<ProtectedRoute allowedRoles={['superadmin']} />}>
+              <Route path="/admin/users/roles" element={<SuperAdminUsersPage />} />
             </Route>
 
             {/* FIX 1: Role 1: Developer / Admin Route Guard */}

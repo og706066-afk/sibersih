@@ -12,6 +12,7 @@ import {
 import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../config/firebase';
 import type { UserProfile, UserRole } from '../types';
+import { normalizeUserRoles, isValidUserRole } from '../types';
 
 import { DEMO_PROFILES } from '../constants/demoProfiles';
 
@@ -30,10 +31,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // If Firebase is not configured, fall back to default demo cleaner role
     if (!isFirebaseConfigured || !auth || !db) {
       const savedRole = (localStorage.getItem('sibersih_demo_role') as UserRole) || 'cleaner';
-      const baseProfile = DEMO_PROFILES[savedRole] || DEMO_PROFILES.cleaner;
+      const baseProfile = DEMO_PROFILES[savedRole as keyof typeof DEMO_PROFILES] || DEMO_PROFILES.cleaner;
       const savedDemoAvatar = localStorage.getItem(`sibersih_demo_avatar_${savedRole}`);
       setCurrentUser({
         ...baseProfile,
+        roles: normalizeUserRoles(baseProfile),
         avatarUrl: savedDemoAvatar || baseProfile.avatarUrl,
       });
       setIsLoading(false);
@@ -47,9 +49,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const userDocRef = doc(db, 'users', user.uid);
           const userSnap = await getDoc(userDocRef);
           if (userSnap.exists()) {
-            const profile = userSnap.data() as UserProfile;
+            const rawData = userSnap.data();
             // Tolak user yang dinonaktifkan oleh Administrator
-            if (profile.isActive !== true) {
+            if (rawData.isActive !== true) {
               if (auth) await firebaseSignOut(auth);
               setCurrentUser(null);
               setFirebaseUser(null);
@@ -57,9 +59,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               return;
             }
 
+            const roles = normalizeUserRoles(rawData);
+            const primaryRole: UserRole = isValidUserRole(rawData.role) ? rawData.role : roles[0];
+
             const loadedProfile: UserProfile = {
-              ...profile,
-              avatarUrl: profile.avatarUrl || undefined,
+              uid: user.uid,
+              email: rawData.email || user.email || '',
+              displayName: rawData.displayName || user.displayName || 'Pengguna',
+              role: primaryRole,
+              roles: roles,
+              phoneNumber: rawData.phoneNumber,
+              avatarUrl: rawData.avatarUrl || undefined,
+              photoURL: rawData.photoURL,
+              isActive: true,
+              createdAt: rawData.createdAt || new Date().toISOString(),
+              updatedAt: rawData.updatedAt || new Date().toISOString(),
             };
             setCurrentUser(loadedProfile);
           } else {
@@ -89,7 +103,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<UserProfile> => {
     if (!isFirebaseConfigured || !auth || !db) {
       // Demo authentication simulation
-      const foundRole = (Object.keys(DEMO_PROFILES) as UserRole[]).find(
+      const demoKeys = Object.keys(DEMO_PROFILES) as (keyof typeof DEMO_PROFILES)[];
+      const foundRole = demoKeys.find(
         (r) => DEMO_PROFILES[r].email.toLowerCase() === email.toLowerCase()
       );
       if (foundRole) {
@@ -101,6 +116,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const savedDemoAvatar = localStorage.getItem(`sibersih_demo_avatar_${foundRole}`);
         const activeDemoUser: UserProfile = {
           ...demoUser,
+          roles: normalizeUserRoles(demoUser),
           avatarUrl: savedDemoAvatar || demoUser.avatarUrl,
         };
         setCurrentUser(activeDemoUser);
@@ -114,18 +130,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const userDocRef = doc(db, 'users', userCredential.user.uid);
     const userSnap = await getDoc(userDocRef);
     if (userSnap.exists()) {
-      const profile = userSnap.data() as UserProfile;
+      const rawData = userSnap.data();
       // Tolak user jika isActive !== true
-      if (profile.isActive !== true) {
+      if (rawData.isActive !== true) {
         await firebaseSignOut(auth);
         setCurrentUser(null);
         setFirebaseUser(null);
         throw new Error('Akun Anda sedang dinonaktifkan oleh Administrator.');
       }
+      const roles = normalizeUserRoles(rawData);
+      const primaryRole: UserRole = isValidUserRole(rawData.role) ? rawData.role : roles[0];
+
       const loadedProfile: UserProfile = {
-        ...profile,
-        avatarUrl: profile.avatarUrl || undefined,
+        uid: userCredential.user.uid,
+        email: rawData.email || userCredential.user.email || '',
+        displayName: rawData.displayName || userCredential.user.displayName || 'Pengguna',
+        role: primaryRole,
+        roles: roles,
+        phoneNumber: rawData.phoneNumber,
+        avatarUrl: rawData.avatarUrl || undefined,
+        photoURL: rawData.photoURL,
+        isActive: true,
+        createdAt: rawData.createdAt || new Date().toISOString(),
+        updatedAt: rawData.updatedAt || new Date().toISOString(),
       };
+      setActiveRoleState(null);
       setCurrentUser(loadedProfile);
       return loadedProfile;
     }
@@ -144,12 +173,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     displayName: string,
     role: UserRole
   ): Promise<void> => {
+    const roles: UserRole[] = [role];
     if (!isFirebaseConfigured || !auth || !db) {
       const newMockProfile: UserProfile = {
         uid: `mock-${Date.now()}`,
         email,
         displayName,
         role,
+        roles,
         isActive: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -164,6 +195,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       email,
       displayName,
       role,
+      roles,
       isActive: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -221,11 +253,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setCurrentUser((prev) => (prev ? { ...prev, avatarUrl } : null));
   };
 
+  const refreshUserProfile = async (): Promise<UserProfile | null> => {
+    if (!isFirebaseConfigured || !auth || !db) {
+      return currentUser;
+    }
+    const currentUid = auth.currentUser?.uid || currentUser?.uid;
+    if (!currentUid) return null;
+
+    try {
+      const userDocRef = doc(db, 'users', currentUid);
+      const userSnap = await getDoc(userDocRef);
+      if (userSnap.exists()) {
+        const rawData = userSnap.data();
+        const roles = normalizeUserRoles(rawData);
+        const primaryRole: UserRole = isValidUserRole(rawData.role) ? rawData.role : roles[0];
+        const loadedProfile: UserProfile = {
+          uid: currentUid,
+          email: rawData.email || auth.currentUser?.email || '',
+          displayName: rawData.displayName || auth.currentUser?.displayName || 'Pengguna',
+          role: primaryRole,
+          roles: roles,
+          phoneNumber: rawData.phoneNumber,
+          avatarUrl: rawData.avatarUrl || undefined,
+          photoURL: rawData.photoURL,
+          isActive: true,
+          createdAt: rawData.createdAt || new Date().toISOString(),
+          updatedAt: rawData.updatedAt || new Date().toISOString(),
+        };
+        setCurrentUser(loadedProfile);
+        return loadedProfile;
+      }
+    } catch (err) {
+      console.error('Failed to refresh user profile:', err);
+    }
+    return currentUser;
+  };
+
   const logout = async (): Promise<void> => {
     if (auth && isFirebaseConfigured) {
       await firebaseSignOut(auth);
     }
     localStorage.removeItem('sibersih_demo_role');
+    setActiveRoleState(null);
     setCurrentUser(null);
   };
 
@@ -236,14 +305,57 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     localStorage.setItem('sibersih_demo_role', role);
-    const baseProfile = DEMO_PROFILES[role];
+    const baseProfile = DEMO_PROFILES[role as keyof typeof DEMO_PROFILES] || DEMO_PROFILES.cleaner;
     const savedDemoAvatar = localStorage.getItem(`sibersih_demo_avatar_${role}`);
+    setActiveRoleState(role);
     setCurrentUser({
       ...baseProfile,
+      roles: normalizeUserRoles(baseProfile),
       avatarUrl: savedDemoAvatar || baseProfile.avatarUrl,
     });
   };
 
+  const [activeRoleState, setActiveRoleState] = useState<UserRole | null>(null);
+
+  const userRoles = currentUser?.roles && currentUser.roles.length > 0
+    ? currentUser.roles
+    : currentUser?.role && isValidUserRole(currentUser.role)
+    ? [currentUser.role]
+    : [];
+
+  const activeRole: UserRole =
+    activeRoleState && userRoles.includes(activeRoleState)
+      ? activeRoleState
+      : currentUser?.role && userRoles.includes(currentUser.role)
+      ? currentUser.role
+      : userRoles[0] || 'cleaner';
+
+  const setActiveRole = (newRole: UserRole) => {
+    if (!currentUser) return;
+    const currentRoles =
+      currentUser.roles && currentUser.roles.length > 0
+        ? currentUser.roles
+        : [currentUser.role];
+    if (currentRoles.includes(newRole)) {
+      setActiveRoleState(newRole);
+    }
+  };
+
+  const hasRole = (role: UserRole): boolean => {
+    const userRoles = currentUser?.roles;
+    if (!userRoles || !Array.isArray(userRoles)) {
+      return false;
+    }
+    return userRoles.includes(role);
+  };
+
+  const hasAnyRole = (rolesToCheck: UserRole[]): boolean => {
+    const userRoles = currentUser?.roles;
+    if (!userRoles || !Array.isArray(userRoles)) {
+      return false;
+    }
+    return rolesToCheck.some((r) => userRoles.includes(r));
+  };
 
   return (
     <AuthContext.Provider
@@ -258,6 +370,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         updateProfilePhoto,
         logout,
         switchDemoRole,
+        hasRole,
+        hasAnyRole,
+        activeRole,
+        setActiveRole,
+        refreshUserProfile,
       }}
     >
       {children}
@@ -267,5 +384,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export { useAuth } from './useAuth';
 export { AuthContext, type AuthContextType } from './authContextInstance';
+export { normalizeUserRoles, isValidUserRole, VALID_USER_ROLES } from '../types';
 
 

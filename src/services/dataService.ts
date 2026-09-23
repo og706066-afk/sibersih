@@ -32,6 +32,7 @@ import type {
   UserProfile,
   UserRole,
 } from '../types';
+import { VALID_USER_ROLES, normalizeUserRoles } from '../types';
 
 
 // Storage keys for offline / fallback data
@@ -959,6 +960,17 @@ export const DataService = {
     }
 
     return getLocalCollection<UserProfile>(STORAGE_KEYS.users, [
+      {
+        uid: 'user-superadmin-1',
+        email: 'superadmin@sibersih.id',
+        displayName: 'K.H. Ahmad Dahlan (Super Admin)',
+        role: 'superadmin',
+        roles: ['superadmin', 'admin'],
+        phoneNumber: '081211223344',
+        isActive: true,
+        createdAt: '2026-08-01T08:00:00Z',
+        updatedAt: '2026-08-01T08:00:00Z',
+      },
       DEMO_PROFILES.admin,
       DEMO_PROFILES.cleaner,
       DEMO_PROFILES.teacher,
@@ -982,7 +994,96 @@ export const DataService = {
         createdAt: '2026-08-10T08:00:00Z',
         updatedAt: '2026-08-10T08:00:00Z',
       },
+      {
+        uid: 'user-multirole-1',
+        email: 'ustadz.joko@sibersih.id',
+        displayName: 'Ustadz Joko Subekti (Koordinator)',
+        role: 'teacher',
+        roles: ['teacher', 'cleaner'],
+        phoneNumber: '081377889900',
+        isActive: true,
+        createdAt: '2026-08-05T08:00:00Z',
+        updatedAt: '2026-08-05T08:00:00Z',
+      },
     ]);
+  },
+
+  async updateUserRoles(
+    uid: string,
+    roles: UserRole[],
+    actorUid?: string
+  ): Promise<{ roles: UserRole[]; role: UserRole }> {
+    if (!Array.isArray(roles) || roles.length === 0) {
+      throw new Error('Pengguna harus memiliki minimal satu role.');
+    }
+
+    // Validasi dan deduplikasi role sesuai VALID_USER_ROLES
+    const validRoles = Array.from(new Set(roles)).filter((r): r is UserRole =>
+      VALID_USER_ROLES.includes(r)
+    );
+
+    if (validRoles.length === 0) {
+      throw new Error('Pengguna harus memiliki minimal satu role.');
+    }
+
+    // Ambil data pengguna terbaru untuk validasi proteksi Super Admin terakhir
+    const allUsers = await this.getUsers();
+    const targetUser = allUsers.find((u) => u.uid === uid);
+
+    if (targetUser) {
+      const targetRoles = targetUser.roles || normalizeUserRoles(targetUser);
+      const targetHadSuperAdmin = targetRoles.includes('superadmin');
+      const targetWillHaveSuperAdmin = validRoles.includes('superadmin');
+
+      // Jika target kehilangan role superadmin
+      if (targetHadSuperAdmin && !targetWillHaveSuperAdmin) {
+        // Hitung Super Admin lain yang masih aktif
+        const otherSuperAdmins = allUsers.filter(
+          (u) =>
+            u.uid !== uid &&
+            u.isActive !== false &&
+            (u.roles || normalizeUserRoles(u)).includes('superadmin')
+        );
+
+        if (otherSuperAdmins.length === 0) {
+          if (actorUid && actorUid === uid) {
+            throw new Error(
+              'Anda adalah satu-satunya Super Admin. Tambahkan Super Admin lain sebelum menghapus role Super Admin dari akun ini.'
+            );
+          } else {
+            throw new Error('Minimal harus ada satu Super Admin yang tetap aktif.');
+          }
+        }
+      }
+    }
+
+    const primaryRole = validRoles[0];
+    const nowIso = new Date().toISOString();
+
+    if (isFirebaseConfigured && db) {
+      const userDocRef = doc(db, 'users', uid);
+      await updateDoc(userDocRef, {
+        roles: validRoles,
+        role: primaryRole,
+        updatedAt: nowIso,
+      });
+      return { roles: validRoles, role: primaryRole };
+    }
+
+    // Offline / Demo mode simulation
+    const updatedUsers = allUsers.map((u) => {
+      if (u.uid === uid) {
+        return {
+          ...u,
+          roles: validRoles,
+          role: primaryRole,
+          updatedAt: nowIso,
+        };
+      }
+      return u;
+    });
+    setLocalCollection(STORAGE_KEYS.users, updatedUsers);
+    return { roles: validRoles, role: primaryRole };
   },
 
   async createUserAccount(params: {

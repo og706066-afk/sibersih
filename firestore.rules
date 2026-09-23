@@ -1,42 +1,84 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
     // ============================================================
     // HELPER FUNCTIONS
     // ============================================================
     function isAuthenticated() {
       return request.auth != null;
     }
-    
+
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
-    
-    // FIX Audit 06: Dedicated helper for active authenticated users
+
+    // Dedicated helper for active authenticated users
     function isActiveUser() {
-      return isAuthenticated() && getUserData().isActive == true;
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        getUserData().get('isActive', false) == true;
     }
-    
-    function getUserRole() {
-      return isActiveUser() ? getUserData().role : null;
+
+    // Core multi-role checking helper with backward-compatibility & priority enforcement
+    function hasRole(targetRole) {
+      return isActiveUser() && (
+        ('roles' in getUserData() && getUserData().roles is list)
+          ? getUserData().roles.hasAny([targetRole])
+          : getUserData().get('role', '') == targetRole
+      );
     }
-    
+
+    function isSuperAdmin() {
+      return hasRole('superadmin');
+    }
+
     function isAdmin() {
-      return getUserRole() == 'admin';
+      return hasRole('admin') || isSuperAdmin();
     }
-    
+
     function isCleaner() {
-      return getUserRole() == 'cleaner';
+      return hasRole('cleaner');
     }
-    
+
     function isTeacher() {
-      return getUserRole() == 'teacher';
+      return hasRole('teacher');
     }
 
     function isCleanerOrAdmin() {
-      let role = getUserRole();
-      return role == 'admin' || role == 'cleaner';
+      return isCleaner() || isAdmin();
+    }
+
+    function getUserRole() {
+      return isActiveUser() ? getUserData().get('role', null) : null;
+    }
+
+    // Helpers for Super Admin boundary protection
+    function requestHasSuperAdmin() {
+      return request.resource.data.get('role', '') == 'superadmin' ||
+        (request.resource.data.get('roles', []) is list && request.resource.data.get('roles', []).hasAny(['superadmin']));
+    }
+
+    function resourceHasSuperAdmin() {
+      return resource.data.get('role', '') == 'superadmin' ||
+        (resource.data.get('roles', []) is list && resource.data.get('roles', []).hasAny(['superadmin']));
+    }
+
+    function canAdminUpdateUser(userId) {
+      return isAdmin() &&
+        request.auth.uid != userId &&
+        !resourceHasSuperAdmin() &&
+        !requestHasSuperAdmin() &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'roles']);
+    }
+
+    function isValidUserSelfCreate(userId) {
+      return isAuthenticated() &&
+        request.auth.uid == userId &&
+        request.resource.data.uid == userId &&
+        request.resource.data.isActive == true &&
+        request.resource.data.get('role', 'cleaner') in ['cleaner', 'teacher'] &&
+        (!('roles' in request.resource.data) || (request.resource.data.roles is list && !request.resource.data.roles.hasAny(['superadmin', 'admin'])));
     }
 
     // Helper to verify if request.auth.uid is assigned teacher of classId
@@ -105,9 +147,13 @@ service cloud.firestore {
     // ============================================================
     match /users/{userId} {
       allow read: if isAuthenticated() && (request.auth.uid == userId || isCleanerOrAdmin() || isTeacher());
-      allow create: if isAdmin() || (isAuthenticated() && request.auth.uid == userId && request.resource.data.role in ['cleaner', 'teacher'] && request.resource.data.isActive == true && request.resource.data.uid == userId);
-      allow update: if isAdmin() || (isAuthenticated() && request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isActive']));
-      allow delete: if isAdmin();
+      allow create: if isSuperAdmin() ||
+        (isAdmin() && !requestHasSuperAdmin()) ||
+        isValidUserSelfCreate(userId);
+      allow update: if isSuperAdmin() ||
+        canAdminUpdateUser(userId) ||
+        (isAuthenticated() && request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'roles', 'isActive']));
+      allow delete: if isSuperAdmin() || (isAdmin() && !resourceHasSuperAdmin());
     }
 
     // ============================================================

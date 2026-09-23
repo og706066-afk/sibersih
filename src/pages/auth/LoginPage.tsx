@@ -38,19 +38,15 @@ export const LoginPage: React.FC = () => {
     setIsLoading(true);
     setErrorMessage('');
     try {
-      // FIX 3: Dynamic post-login redirect based on resolved user role
+      // Dynamic post-login redirect based on multi-role
       const user = await login(email, password);
-      switch (user.role) {
-        case 'admin':
-          navigate('/admin');
-          break;
-        case 'teacher':
-          navigate('/teacher');
-          break;
-        case 'cleaner':
-        default:
-          navigate('/cleaner');
-          break;
+      const userRoles = user.roles && user.roles.length > 0 ? user.roles : [user.role];
+      if (userRoles.includes('superadmin') || userRoles.includes('admin')) {
+        navigate('/admin');
+      } else if (userRoles.includes('teacher')) {
+        navigate('/teacher');
+      } else {
+        navigate('/cleaner');
       }
     } catch (err: any) {
       setErrorMessage(err?.message || 'Gagal masuk. Periksa kembali email dan kata sandi Anda.');

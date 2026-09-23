@@ -13,6 +13,7 @@ import {
   History,
   FileText,
   User,
+  ShieldCheck,
 } from 'lucide-react';
 import type { UserRole } from '../../types';
 
@@ -37,6 +38,16 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ role }) => {
           { to: '/cleaner/penalties', label: 'Denda', icon: <Receipt className="w-5 h-5" /> },
           { to: '/cleaner/inventory', label: 'Inventaris', icon: <Boxes className="w-5 h-5" /> },
           { to: '/cleaner/profile', label: 'Profil', icon: <User className="w-5 h-5" /> },
+        ];
+      case 'superadmin':
+        return [
+          { to: '/admin', label: 'Beranda', icon: <LayoutDashboard className="w-5 h-5" /> },
+          { to: '/admin/users/roles', label: 'Manajemen Role', icon: <ShieldCheck className="w-5 h-5" /> },
+          { to: '/admin/users', label: 'Pengguna', icon: <Users className="w-5 h-5" /> },
+          { to: '/admin/areas', label: 'Area/Kelas', icon: <Building2 className="w-5 h-5" /> },
+          { to: '/admin/penalties', label: 'Denda & Kas', icon: <Receipt className="w-5 h-5" /> },
+          { to: '/admin/violations', label: 'Aturan', icon: <AlertTriangle className="w-5 h-5" /> },
+          { to: '/admin/settings', label: 'Pengaturan', icon: <Settings className="w-5 h-5" /> },
         ];
       case 'admin':
         return [
@@ -87,7 +98,7 @@ export const BottomNavigation: React.FC<BottomNavigationProps> = ({ role }) => {
                 >
                   {item.icon}
                 </div>
-                <span className="text-[10px] mt-0.5 tracking-tight">{item.label}</span>
+                <span className="text-[9px] sm:text-[10px] mt-0.5 tracking-tight text-center leading-tight truncate max-w-[64px]">{item.label}</span>
               </>
             )}
           </NavLink>

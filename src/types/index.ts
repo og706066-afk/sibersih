@@ -7,13 +7,67 @@
 // USER & ROLE MODELS
 // ============================================================
 
-export type UserRole = 'admin' | 'cleaner' | 'teacher';
+export type UserRole =
+  | 'superadmin'
+  | 'admin'
+  | 'cleaner'
+  | 'teacher';
+
+export const VALID_USER_ROLES: readonly UserRole[] = [
+  'superadmin',
+  'admin',
+  'cleaner',
+  'teacher',
+] as const;
+
+export function isValidUserRole(role: unknown): role is UserRole {
+  return typeof role === 'string' && VALID_USER_ROLES.includes(role as UserRole);
+}
+
+/**
+ * Normalisasi role pengguna agar mendukung format legacy (role: string)
+ * dan format multi-role baru (roles: UserRole[]), mencegah duplikasi,
+ * memvalidasi nilai role, serta menjamin fallback aman tanpa eskalasi hak (bukan admin/superadmin).
+ */
+export function normalizeUserRoles(data: unknown): UserRole[] {
+  if (!data || typeof data !== 'object') {
+    return ['cleaner'];
+  }
+
+  const record = data as Record<string, unknown>;
+  const result: UserRole[] = [];
+
+  // 1. Jika roles[] tersedia dan valid, jadikan sumber utama
+  if (Array.isArray(record.roles)) {
+    for (let i = 0; i < record.roles.length; i++) {
+      const r = record.roles[i];
+      const valid = isValidUserRole(r);
+      const included = result.includes(r as UserRole);
+      if (valid && !included) {
+        result.push(r as UserRole);
+      }
+    }
+  }
+
+  // 2. Jika roles[] belum ada/kosong, periksa field legacy 'role'
+  if (result.length === 0 && isValidUserRole(record.role)) {
+    result.push(record.role);
+  }
+
+  // 3. Jika tetap kosong (data tidak valid/korup), fallback ke default terendah tanpa privilege
+  if (result.length === 0) {
+    result.push('cleaner');
+  }
+
+  return result;
+}
 
 export interface UserProfile {
   uid: string;
   email: string;
   displayName: string;
-  role: UserRole;
+  role: UserRole; // Tetap dipertahankan untuk backward compatibility single-role
+  roles?: UserRole[]; // Format baru multi-role array (dinormalisasi oleh AuthContext)
   phoneNumber?: string;
   avatarUrl?: string;
   photoURL?: string;

@@ -14,6 +14,13 @@ export interface AuthContextType {
   updateProfilePhoto: (avatarUrl: string) => Promise<void>;
   logout: () => Promise<void>;
   switchDemoRole: (role: UserRole) => void;
+  // Multi-role helpers
+  hasRole: (role: UserRole) => boolean;
+  hasAnyRole: (roles: UserRole[]) => boolean;
+  // Active role UI state
+  activeRole: UserRole;
+  setActiveRole: (role: UserRole) => void;
+  refreshUserProfile?: () => Promise<UserProfile | null>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);

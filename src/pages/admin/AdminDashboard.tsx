@@ -12,6 +12,7 @@ import {
   RefreshCw,
   ArrowRight,
   Settings,
+  ShieldCheck,
 } from 'lucide-react';
 import { Card, Button, Badge, LoadingState, Modal } from '../../components/common';
 
@@ -28,7 +29,7 @@ import type {
 
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { isFirebaseActive } = useAuth();
+  const { isFirebaseActive, hasRole, activeRole } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -250,6 +251,33 @@ export const AdminDashboard: React.FC = () => {
         </h3>
 
         <div className="space-y-2">
+          {/* Khusus Super Admin: Manajemen Role */}
+          {(hasRole('superadmin') || activeRole === 'superadmin') && (
+            <Card
+              hoverEffect
+              onClick={() => navigate('/admin/users/roles')}
+              className="p-3 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 flex items-center justify-between cursor-pointer"
+            >
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-purple-700 text-white flex items-center justify-center shadow-xs">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h4 className="text-xs font-bold text-purple-950">Manajemen Role</h4>
+                    <span className="text-[10px] bg-purple-200 text-purple-800 font-semibold px-1.5 py-0.2 rounded">
+                      👑 Super Admin
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-purple-700">
+                    Kelola otorisasi peran pengguna & sistem multi-role
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-purple-600" />
+            </Card>
+          )}
+
           <Card
             hoverEffect
             onClick={() => navigate('/admin/reports')}

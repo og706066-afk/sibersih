@@ -103,6 +103,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string): Promise<UserProfile> => {
     if (!isFirebaseConfigured || !auth || !db) {
       // Demo authentication simulation
+      try {
+        const raw = localStorage.getItem('sibersih_data_users');
+        if (raw) {
+          const localList = JSON.parse(raw) as UserProfile[];
+          const matched = localList.find((u) => u.email.toLowerCase() === email.toLowerCase());
+          if (matched && matched.isActive === false) {
+            throw new Error('Akun Anda sedang dinonaktifkan oleh Administrator.');
+          }
+        }
+      } catch (err: any) {
+        if (err?.message?.includes('dinonaktifkan')) {
+          throw err;
+        }
+      }
+
       const demoKeys = Object.keys(DEMO_PROFILES) as (keyof typeof DEMO_PROFILES)[];
       const foundRole = demoKeys.find(
         (r) => DEMO_PROFILES[r].email.toLowerCase() === email.toLowerCase()
@@ -111,7 +126,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const demoUser = DEMO_PROFILES[foundRole];
         // FIX 2: Deny inactive users in demo mode
         if (demoUser.isActive !== true) {
-          throw new Error('Akun Anda dinonaktifkan. Hubungi Administrator.');
+          throw new Error('Akun Anda sedang dinonaktifkan oleh Administrator.');
         }
         const savedDemoAvatar = localStorage.getItem(`sibersih_demo_avatar_${foundRole}`);
         const activeDemoUser: UserProfile = {

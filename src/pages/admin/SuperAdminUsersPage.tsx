@@ -14,6 +14,8 @@ import {
   Check,
   AlertCircle,
   X,
+  Trash2,
+  RotateCcw,
 } from 'lucide-react';
 
 import { Card, Button, Input, LoadingState, EmptyState, ErrorState, Modal } from '../../components/common';
@@ -66,6 +68,7 @@ export const SuperAdminUsersPage: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterRole, setFilterRole] = useState<'all' | UserRole>('all');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
 
   // Modal & Mutation State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -75,6 +78,12 @@ export const SuperAdminUsersPage: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [successFeedback, setSuccessFeedback] = useState<string | null>(null);
+
+  // Modal Deaktivasi (Soft Delete)
+  const [isDeactivateModalOpen, setIsDeactivateModalOpen] = useState(false);
+  const [userToDeactivate, setUserToDeactivate] = useState<UserProfile | null>(null);
+  const [isDeactivating, setIsDeactivating] = useState(false);
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
 
   const handleOpenRoleModal = (user: UserProfile) => {
     setSelectedUser(user);
@@ -251,14 +260,89 @@ export const SuperAdminUsersPage: React.FC = () => {
     }
   }, [isSuperAdmin, loadUsers]);
 
-  // Statistik role untuk badge & summary
+  // Cek apakah target pengguna adalah Super Admin terakhir yang masih aktif
+  const isLastActiveSuperAdmin = (targetUser: UserProfile): boolean => {
+    const targetRoles = targetUser.roles || normalizeUserRoles(targetUser);
+    if (!targetRoles.includes('superadmin')) return false;
+
+    const otherActiveSuperAdmins = users.filter(
+      (u) =>
+        u.uid !== targetUser.uid &&
+        u.isActive !== false &&
+        (u.roles || normalizeUserRoles(u)).includes('superadmin')
+    );
+
+    return otherActiveSuperAdmins.length === 0;
+  };
+
+  const handleOpenDeactivateModal = (user: UserProfile) => {
+    setUserToDeactivate(user);
+    setDeactivateError(null);
+    setIsDeactivateModalOpen(true);
+  };
+
+  const handleCloseDeactivateModal = () => {
+    if (isDeactivating) return;
+    setIsDeactivateModalOpen(false);
+    setUserToDeactivate(null);
+    setDeactivateError(null);
+  };
+
+  const handleConfirmDeactivate = async () => {
+    if (!userToDeactivate || isDeactivating) return;
+
+    if (isLastActiveSuperAdmin(userToDeactivate)) {
+      setDeactivateError('Super Admin terakhir yang masih aktif tidak dapat dinonaktifkan.');
+      return;
+    }
+
+    setIsDeactivating(true);
+    setDeactivateError(null);
+
+    try {
+      await DataService.deactivateUser(userToDeactivate.uid, currentUser?.uid);
+      setSuccessFeedback('Pengguna berhasil dinonaktifkan.');
+      setIsDeactivateModalOpen(false);
+      setUserToDeactivate(null);
+      await loadUsers();
+      setTimeout(() => {
+        setSuccessFeedback(null);
+      }, 4000);
+    } catch (err: any) {
+      setDeactivateError(err?.message || 'Gagal menonaktifkan pengguna.');
+    } finally {
+      setIsDeactivating(false);
+    }
+  };
+
+  const handleReactivateUser = async (user: UserProfile) => {
+    try {
+      await DataService.reactivateUser(user.uid);
+      setSuccessFeedback(`Pengguna "${user.displayName}" berhasil diaktifkan kembali.`);
+      await loadUsers();
+      setTimeout(() => {
+        setSuccessFeedback(null);
+      }, 4000);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Gagal mengaktifkan kembali pengguna.');
+    }
+  };
+
+  // Statistik role & status untuk badge & summary
   const stats = useMemo(() => {
     let superadminCount = 0;
     let adminCount = 0;
     let cleanerCount = 0;
     let teacherCount = 0;
+    let activeCount = 0;
+    let inactiveCount = 0;
 
     users.forEach((u) => {
+      if (u.isActive !== false) {
+        activeCount++;
+      } else {
+        inactiveCount++;
+      }
       const userRoles = u.roles || normalizeUserRoles(u);
       if (userRoles.includes('superadmin')) superadminCount++;
       if (userRoles.includes('admin')) adminCount++;
@@ -268,6 +352,8 @@ export const SuperAdminUsersPage: React.FC = () => {
 
     return {
       total: users.length,
+      active: activeCount,
+      inactive: inactiveCount,
       superadmin: superadminCount,
       admin: adminCount,
       cleaner: cleanerCount,
@@ -278,21 +364,26 @@ export const SuperAdminUsersPage: React.FC = () => {
   // Filter & Search
   const filteredUsers = useMemo(() => {
     return users.filter((u) => {
-      // Filter pencarian berdasarkan nama dan email
+      // Filter pencarian berdasarkan nama, email, dan UID
       const query = searchQuery.trim().toLowerCase();
       const matchesSearch =
         !query ||
         u.displayName.toLowerCase().includes(query) ||
-        u.email.toLowerCase().includes(query);
+        u.email.toLowerCase().includes(query) ||
+        u.uid.toLowerCase().includes(query);
 
       if (!matchesSearch) return false;
+
+      // Filter berdasarkan status
+      if (filterStatus === 'active' && u.isActive === false) return false;
+      if (filterStatus === 'inactive' && u.isActive !== false) return false;
 
       // Filter berdasarkan role
       if (filterRole === 'all') return true;
       const userRoles = u.roles || normalizeUserRoles(u);
       return userRoles.includes(filterRole);
     });
-  }, [users, searchQuery, filterRole]);
+  }, [users, searchQuery, filterStatus, filterRole]);
 
   // Helper render badge role dengan emoji sesuai requirement
   const renderRoleBadge = (role: UserRole) => {
@@ -471,7 +562,7 @@ export const SuperAdminUsersPage: React.FC = () => {
       <div>
         <Input
           type="text"
-          placeholder="Cari nama lengkap atau email pengguna..."
+          placeholder="Cari nama atau email pengguna..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           leftIcon={<Search className="w-4 h-4 text-slate-400" />}
@@ -479,14 +570,59 @@ export const SuperAdminUsersPage: React.FC = () => {
         />
       </div>
 
+      {/* Filter Status: Semua, Aktif, Nonaktif */}
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+          Status:
+        </span>
+        <button
+          type="button"
+          onClick={() => setFilterStatus('all')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap ${
+            filterStatus === 'all'
+              ? 'bg-slate-900 text-white'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          Semua ({stats.total})
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilterStatus('active')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            filterStatus === 'active'
+              ? 'bg-emerald-700 text-white'
+              : 'bg-white text-emerald-700 border border-emerald-200 hover:bg-emerald-50'
+          }`}
+        >
+          <span>🟢</span>
+          <span>Aktif ({stats.active})</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setFilterStatus('inactive')}
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+            filterStatus === 'inactive'
+              ? 'bg-slate-700 text-white'
+              : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          <span>⚪</span>
+          <span>Nonaktif ({stats.inactive})</span>
+        </button>
+      </div>
+
       {/* Role Filter Pills */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+        <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider shrink-0 mr-1">
+          Peran:
+        </span>
         <button
           type="button"
           onClick={() => setFilterRole('all')}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap cursor-pointer ${
             filterRole === 'all'
-              ? 'bg-slate-900 text-white'
+              ? 'bg-slate-800 text-white'
               : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
           }`}
         >
@@ -545,15 +681,16 @@ export const SuperAdminUsersPage: React.FC = () => {
             icon={<Users className="w-7 h-7 text-slate-400" />}
             title="Tidak Ada Pengguna"
             description={
-              searchQuery || filterRole !== 'all'
+              searchQuery || filterStatus !== 'all' || filterRole !== 'all'
                 ? 'Tidak ditemukan pengguna yang sesuai dengan pencarian atau filter yang dipilih.'
                 : 'Belum ada data pengguna yang terdaftar di sistem.'
             }
-            actionLabel={searchQuery || filterRole !== 'all' ? 'Reset Pencarian' : undefined}
+            actionLabel={searchQuery || filterStatus !== 'all' || filterRole !== 'all' ? 'Reset Pencarian' : undefined}
             onAction={
-              searchQuery || filterRole !== 'all'
+              searchQuery || filterStatus !== 'all' || filterRole !== 'all'
                 ? () => {
                     setSearchQuery('');
+                    setFilterStatus('all');
                     setFilterRole('all');
                   }
                 : undefined
@@ -563,6 +700,7 @@ export const SuperAdminUsersPage: React.FC = () => {
           filteredUsers.map((user) => {
             const userRoles = user.roles || normalizeUserRoles(user);
             const isMultiRole = userRoles.length > 1;
+            const isLastSuperAdminUser = isLastActiveSuperAdmin(user);
 
             return (
               <Card
@@ -586,9 +724,16 @@ export const SuperAdminUsersPage: React.FC = () => {
                     )}
 
                     <div className="min-w-0">
-                      <h3 className="font-bold text-sm text-slate-900 truncate">
-                        {user.displayName}
-                      </h3>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <h3 className="font-bold text-sm text-slate-900 truncate">
+                          {user.displayName}
+                        </h3>
+                        {currentUser?.uid === user.uid && (
+                          <span className="text-[10px] font-bold bg-purple-100 text-purple-700 px-1.5 py-0.2 rounded border border-purple-200 shrink-0">
+                            Akun Anda
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs text-slate-500">
                         <span className="flex items-center gap-1 truncate">
                           <Mail className="w-3 h-3 text-slate-400 shrink-0" />
@@ -600,21 +745,24 @@ export const SuperAdminUsersPage: React.FC = () => {
                             <span>{user.phoneNumber}</span>
                           </span>
                         )}
+                        <span className="text-[10px] font-mono text-slate-400 truncate">
+                          UID: {user.uid}
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   {/* Status Aktif/Nonaktif */}
                   <div className="shrink-0">
-                    {user.isActive ? (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        Aktif
+                    {user.isActive !== false ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                        <span>🟢</span>
+                        <span>Aktif</span>
                       </span>
                     ) : (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 px-2 py-0.5 rounded-full border border-rose-200">
-                        <XCircle className="w-3 h-3 text-rose-600" />
-                        Nonaktif
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-300">
+                        <span>⚪</span>
+                        <span>Nonaktif</span>
                       </span>
                     )}
                   </div>
@@ -652,21 +800,55 @@ export const SuperAdminUsersPage: React.FC = () => {
                       )}
                     </div>
                   )}
-                  {/* Tombol Aksi Kelola Role */}
-                  <div className="pt-2.5 mt-2 border-t border-slate-100 flex items-center justify-between">
-                    <span className="text-[11px] text-slate-400">
+
+                  {/* Tombol Aksi: Kelola Role & Nonaktifkan (Soft Delete) */}
+                  <div className="pt-3 mt-2 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                    <span className="text-[11px] font-medium text-slate-500">
                       Otorisasi peran pengguna
                     </span>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleOpenRoleModal(user)}
-                      leftIcon={<ShieldCheck className="w-3.5 h-3.5 text-purple-600" />}
-                      className="text-xs font-semibold text-purple-700 border-purple-200 hover:bg-purple-50 hover:border-purple-300 shadow-2xs cursor-pointer"
-                    >
-                      Kelola Role
-                    </Button>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* 1. Kelola Role */}
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleOpenRoleModal(user)}
+                        leftIcon={<ShieldCheck className="w-3.5 h-3.5 text-purple-600 shrink-0" />}
+                        className="text-xs font-semibold text-purple-700 border-purple-200 hover:bg-purple-50 hover:border-purple-300 shadow-2xs cursor-pointer shrink-0"
+                      >
+                        Kelola Role
+                      </Button>
+
+                      {/* 2. Hapus Pengguna (Aktif) atau Aktifkan Kembali (Nonaktif) */}
+                      {user.isActive !== false ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenDeactivateModal(user)}
+                          leftIcon={<Trash2 className="w-3.5 h-3.5 text-rose-600 shrink-0" />}
+                          className="text-xs font-semibold text-rose-700 border-rose-200 hover:bg-rose-50 hover:border-rose-300 shadow-2xs cursor-pointer shrink-0"
+                          title={
+                            isLastSuperAdminUser
+                              ? 'Super Admin terakhir yang masih aktif tidak dapat dinonaktifkan'
+                              : 'Nonaktifkan akun pengguna'
+                          }
+                        >
+                          Hapus Pengguna
+                        </Button>
+                      ) : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleReactivateUser(user)}
+                          leftIcon={<RotateCcw className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                          className="text-xs font-semibold text-emerald-700 border-emerald-200 hover:bg-emerald-50 hover:border-emerald-300 shadow-2xs cursor-pointer shrink-0"
+                        >
+                          Aktifkan Kembali
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -859,6 +1041,102 @@ export const SuperAdminUsersPage: React.FC = () => {
             <div className="p-2.5 bg-slate-100 rounded-lg text-[11px] text-slate-600 leading-relaxed border border-slate-200">
               <span className="font-semibold text-slate-700">Sinkronisasi Legacy:</span> Field <code className="bg-slate-200/80 px-1 py-0.5 rounded font-mono text-slate-800">role</code> akan otomatis disinkronkan dengan role pertama (<strong>{selectedRoles[0] || '—'}</strong>) untuk menjaga kompatibilitas aplikasi.
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Modal: Konfirmasi Nonaktifkan Pengguna (Soft Delete) */}
+      <Modal
+        isOpen={isDeactivateModalOpen}
+        onClose={handleCloseDeactivateModal}
+        title="Nonaktifkan Pengguna?"
+        size="md"
+        footer={
+          <div className="flex items-center justify-end gap-2 w-full">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={handleCloseDeactivateModal}
+              disabled={isDeactivating}
+            >
+              Batal
+            </Button>
+            <Button
+              type="button"
+              variant="danger"
+              size="sm"
+              onClick={handleConfirmDeactivate}
+              disabled={
+                isDeactivating ||
+                (userToDeactivate ? isLastActiveSuperAdmin(userToDeactivate) : false)
+              }
+              isLoading={isDeactivating}
+            >
+              Nonaktifkan Pengguna
+            </Button>
+          </div>
+        }
+      >
+        {userToDeactivate && (
+          <div className="space-y-3.5">
+            {/* Detail Akun Pengguna */}
+            <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-bold text-sm text-slate-900">
+                  {userToDeactivate.displayName}
+                </span>
+                <div className="flex flex-wrap gap-1">
+                  {(userToDeactivate.roles || normalizeUserRoles(userToDeactivate)).map((r) =>
+                    renderRoleBadge(r)
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span className="truncate">{userToDeactivate.email}</span>
+              </div>
+              <div className="text-[10px] font-mono text-slate-400">
+                UID: {userToDeactivate.uid}
+              </div>
+            </div>
+
+            {/* Pesan Konfirmasi Resmi sesuai Spesifikasi */}
+            <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="leading-relaxed">
+                Pengguna ini tidak dapat login lagi setelah dinonaktifkan. Data profil dan seluruh riwayat aktivitas pengguna tetap tersimpan.
+              </p>
+            </div>
+
+            {/* Proteksi Super Admin Terakhir */}
+            {isLastActiveSuperAdmin(userToDeactivate) && (
+              <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <span className="font-bold block">Tindakan Ditolak:</span>
+                  <span>Super Admin terakhir yang masih aktif tidak dapat dinonaktifkan. Minimal harus ada satu Super Admin aktif.</span>
+                </div>
+              </div>
+            )}
+
+            {/* Peringatan Menonaktifkan Diri Sendiri */}
+            {currentUser?.uid === userToDeactivate.uid && !isLastActiveSuperAdmin(userToDeactivate) && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Perhatian:</strong> Anda sedang menonaktifkan akun Anda sendiri. Sesi login Anda akan otomatis keluar setelah tindakan ini.
+                </span>
+              </div>
+            )}
+
+            {/* Error Message jika terjadi kegagalan */}
+            {deactivateError && (
+              <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                <span className="font-semibold">{deactivateError}</span>
+              </div>
+            )}
           </div>
         )}
       </Modal>

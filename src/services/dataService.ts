@@ -1086,6 +1086,99 @@ export const DataService = {
     return { roles: validRoles, role: primaryRole };
   },
 
+  async deactivateUser(uid: string, actorUid?: string): Promise<void> {
+    const allUsers = await this.getUsers();
+    const targetUser = allUsers.find((u) => u.uid === uid);
+    if (!targetUser) {
+      throw new Error('Pengguna tidak ditemukan.');
+    }
+
+    if (targetUser.isActive === false) {
+      throw new Error('Pengguna ini sudah dalam status nonaktif.');
+    }
+
+    const targetRoles = targetUser.roles || normalizeUserRoles(targetUser);
+    const isTargetSuperAdmin = targetRoles.includes('superadmin');
+
+    // Proteksi: Super Admin tidak boleh menonaktifkan Super Admin terakhir yang masih aktif
+    if (isTargetSuperAdmin) {
+      const otherActiveSuperAdmins = allUsers.filter(
+        (u) =>
+          u.uid !== uid &&
+          u.isActive !== false &&
+          (u.roles || normalizeUserRoles(u)).includes('superadmin')
+      );
+
+      if (otherActiveSuperAdmins.length === 0) {
+        if (actorUid && actorUid === uid) {
+          throw new Error(
+            'Anda adalah satu-satunya Super Admin yang masih aktif. Akun ini tidak dapat dinonaktifkan.'
+          );
+        } else {
+          throw new Error(
+            'Super Admin terakhir yang masih aktif tidak dapat dinonaktifkan. Minimal harus ada satu Super Admin aktif.'
+          );
+        }
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+
+    if (isFirebaseConfigured && db) {
+      const userDocRef = doc(db, 'users', uid);
+      await updateDoc(userDocRef, {
+        isActive: false,
+        updatedAt: nowIso,
+      });
+      return;
+    }
+
+    // Offline / Demo mode simulation
+    const updatedUsers = allUsers.map((u) => {
+      if (u.uid === uid) {
+        return {
+          ...u,
+          isActive: false,
+          updatedAt: nowIso,
+        };
+      }
+      return u;
+    });
+    setLocalCollection(STORAGE_KEYS.users, updatedUsers);
+  },
+
+  async reactivateUser(uid: string): Promise<void> {
+    const allUsers = await this.getUsers();
+    const targetUser = allUsers.find((u) => u.uid === uid);
+    if (!targetUser) {
+      throw new Error('Pengguna tidak ditemukan.');
+    }
+
+    const nowIso = new Date().toISOString();
+
+    if (isFirebaseConfigured && db) {
+      const userDocRef = doc(db, 'users', uid);
+      await updateDoc(userDocRef, {
+        isActive: true,
+        updatedAt: nowIso,
+      });
+      return;
+    }
+
+    // Offline / Demo mode simulation
+    const updatedUsers = allUsers.map((u) => {
+      if (u.uid === uid) {
+        return {
+          ...u,
+          isActive: true,
+          updatedAt: nowIso,
+        };
+      }
+      return u;
+    });
+    setLocalCollection(STORAGE_KEYS.users, updatedUsers);
+  },
+
   async createUserAccount(params: {
     displayName: string;
     email: string;

@@ -366,11 +366,15 @@ export const SuperAdminUsersPage: React.FC = () => {
     return users.filter((u) => {
       // Filter pencarian berdasarkan nama, email, dan UID
       const query = searchQuery.trim().toLowerCase();
+      const displayName = u.displayName ?? '';
+      const email = u.email ?? '';
+      const uid = u.uid ?? '';
+
       const matchesSearch =
         !query ||
-        u.displayName.toLowerCase().includes(query) ||
-        u.email.toLowerCase().includes(query) ||
-        u.uid.toLowerCase().includes(query);
+        displayName.toLowerCase().includes(query) ||
+        email.toLowerCase().includes(query) ||
+        uid.toLowerCase().includes(query);
 
       if (!matchesSearch) return false;
 

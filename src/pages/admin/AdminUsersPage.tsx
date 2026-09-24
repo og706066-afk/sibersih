@@ -232,14 +232,17 @@ export const AdminUsersPage: React.FC = () => {
     return users.filter((u) => {
       // 1. Pencarian lokal: Nama, Email, UID
       const query = searchQuery.trim().toLowerCase();
-      if (query) {
-        const matchesName = u.displayName.toLowerCase().includes(query);
-        const matchesEmail = u.email.toLowerCase().includes(query);
-        const matchesUid = u.uid.toLowerCase().includes(query);
-        if (!matchesName && !matchesEmail && !matchesUid) {
-          return false;
-        }
-      }
+      const displayName = u.displayName ?? '';
+      const email = u.email ?? '';
+      const uid = u.uid ?? '';
+
+      const matchesSearch =
+        !query ||
+        displayName.toLowerCase().includes(query) ||
+        email.toLowerCase().includes(query) ||
+        uid.toLowerCase().includes(query);
+
+      if (!matchesSearch) return false;
 
       // 2. Filter Status: Semua, Aktif, Nonaktif
       if (filterStatus === 'active' && u.isActive === false) return false;

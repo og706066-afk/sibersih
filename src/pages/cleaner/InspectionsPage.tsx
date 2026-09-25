@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   ClipboardCheck,
   Plus,
@@ -13,6 +13,7 @@ import {
   List,
   Check,
   X,
+  Search,
 } from 'lucide-react';
 
 import {
@@ -56,9 +57,25 @@ import {
   getCleanlinessGrade,
   getIndicatorDescription,
   getCleanlinessPredicate,
+  getGradePredicate,
   getCleanlinessLabel,
   getCleanlinessBadgeVariant,
 } from '../../utils/inspectionUtils';
+
+const MONTH_NAMES_ID = [
+  'januari',
+  'februari',
+  'maret',
+  'april',
+  'mei',
+  'juni',
+  'juli',
+  'agustus',
+  'september',
+  'oktober',
+  'november',
+  'desember',
+];
 
 const DEFAULT_CHECKLIST_TEMPLATE: ChecklistFormItem[] = [
   {
@@ -160,6 +177,9 @@ export const InspectionsPage: React.FC = () => {
   } | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Search State
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -673,6 +693,73 @@ export const InspectionsPage: React.FC = () => {
     }
   };
 
+  // Filter & Search Catatan Pemeriksaan
+  const filteredInspections = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return inspections;
+
+    return inspections.filter((insp) => {
+      if (!insp) return false;
+
+      // 1. Nama area / lokasi pemeriksaan
+      const areaName = (insp.areaName ?? '').toLowerCase();
+
+      // 2. Nama pemeriksa / inspector
+      const inspectorName = (insp.inspectorName ?? '').toLowerCase();
+
+      // 3. Status atau grade hasil pemeriksaan (Mumtaz, Jayyid, Maqbul, Rasib, dll)
+      const predicate = getCleanlinessPredicate(insp.totalScore ?? 0).toLowerCase();
+      const gradePredicate = (insp.overallGrade ? getGradePredicate(insp.overallGrade) : '').toLowerCase();
+      const rawGrade = (insp.overallGrade ?? '').toLowerCase();
+      const gradeLabel = getCleanlinessLabel(insp.totalScore ?? 0).toLowerCase();
+      const status = (insp.status ?? '').toLowerCase();
+
+      // 4. Tanggal pemeriksaan jika data tanggal tersedia
+      const dateStr = (insp.date ?? '').toLowerCase();
+      let formattedDate = '';
+      if (insp.date) {
+        const parts = insp.date.split('-');
+        if (parts.length === 3) {
+          const monthIdx = parseInt(parts[1], 10) - 1;
+          const monthName = MONTH_NAMES_ID[monthIdx] ?? '';
+          const day = parseInt(parts[2], 10) || parts[2];
+          const year = parts[0];
+          formattedDate = `${day} ${monthName} ${year} ${monthName}`;
+        } else {
+          try {
+            const d = new Date(insp.date);
+            if (!isNaN(d.getTime())) {
+              formattedDate = d
+                .toLocaleDateString('id-ID', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })
+                .toLowerCase();
+            }
+          } catch {
+            // ignore date parse errors
+          }
+        }
+      }
+
+      const notes = (insp.notes ?? '').toLowerCase();
+
+      return (
+        areaName.includes(query) ||
+        inspectorName.includes(query) ||
+        predicate.includes(query) ||
+        gradePredicate.includes(query) ||
+        rawGrade.includes(query) ||
+        gradeLabel.includes(query) ||
+        status.includes(query) ||
+        dateStr.includes(query) ||
+        formattedDate.includes(query) ||
+        notes.includes(query)
+      );
+    });
+  }, [inspections, searchQuery]);
+
   if (isLoading) {
     return <LoadingState message="Memuat daftar pemeriksaan..." />;
   }
@@ -729,18 +816,40 @@ export const InspectionsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Inspections List */}
-      {inspections.length === 0 ? (
-        <EmptyState
-          icon={<ClipboardCheck className="w-8 h-8" />}
-          title="Belum Ada Pemeriksaan"
-          description="Lakukan inspeksi kebersihan ruang kelas atau fasilitas pondok untuk mencatat checklist."
-          actionLabel="Mulai Pemeriksaan Sekarang"
-          onAction={() => setIsCreateModalOpen(true)}
+      {/* Kolom Pencarian Pemeriksaan */}
+      <div>
+        <Input
+          type="text"
+          placeholder="Cari pemeriksaan..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          leftIcon={<Search className="w-4 h-4 text-slate-400" />}
+          className="text-xs"
         />
+      </div>
+
+      {/* Inspections List */}
+      {filteredInspections.length === 0 ? (
+        inspections.length === 0 ? (
+          <EmptyState
+            icon={<ClipboardCheck className="w-8 h-8" />}
+            title="Belum Ada Pemeriksaan"
+            description="Lakukan inspeksi kebersihan ruang kelas atau fasilitas pondok untuk mencatat checklist."
+            actionLabel="Mulai Pemeriksaan Sekarang"
+            onAction={() => setIsCreateModalOpen(true)}
+          />
+        ) : (
+          <EmptyState
+            icon={<Search className="w-8 h-8 text-slate-400" />}
+            title="Pemeriksaan tidak ditemukan"
+            description={`Tidak ada hasil pemeriksaan yang cocok dengan "${searchQuery}".`}
+            actionLabel="Reset Pencarian"
+            onAction={() => setSearchQuery('')}
+          />
+        )
       ) : (
         <div className="space-y-2.5">
-          {inspections.map((insp) => (
+          {filteredInspections.map((insp) => (
             <Card
               key={insp.id}
               hoverEffect

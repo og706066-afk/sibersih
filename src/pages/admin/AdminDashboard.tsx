@@ -29,7 +29,7 @@ import type {
 
 export const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { isFirebaseActive, hasRole, activeRole } = useAuth();
+  const { isFirebaseActive, activeRole } = useAuth();
   const [isLoading, setIsLoading] = useState(true);
   const [isSeeding, setIsSeeding] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
@@ -252,7 +252,7 @@ export const AdminDashboard: React.FC = () => {
 
         <div className="space-y-2">
           {/* Khusus Super Admin: Manajemen Role */}
-          {(hasRole('superadmin') || activeRole === 'superadmin') && (
+          {activeRole === 'superadmin' && (
             <Card
               hoverEffect
               onClick={() => navigate('/admin/users/roles')}

@@ -16,9 +16,7 @@ export const AppShell: React.FC = () => {
     const path = location.pathname;
     const userRoles = currentUser.roles || [currentUser.role];
 
-    if (path.startsWith('/admin/users/roles') && userRoles.includes('superadmin') && activeRole !== 'superadmin') {
-      setActiveRole('superadmin');
-    } else if (path.startsWith('/teacher') && userRoles.includes('teacher') && activeRole !== 'teacher') {
+    if (path.startsWith('/teacher') && userRoles.includes('teacher') && activeRole !== 'teacher') {
       setActiveRole('teacher');
     } else if (path.startsWith('/cleaner') && userRoles.includes('cleaner') && activeRole !== 'cleaner') {
       setActiveRole('cleaner');

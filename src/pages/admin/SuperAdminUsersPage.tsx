@@ -60,7 +60,7 @@ const AVAILABLE_ROLES: RoleOption[] = [
 
 export const SuperAdminUsersPage: React.FC = () => {
   const navigate = useNavigate();
-  const { currentUser, hasRole, activeRole, setActiveRole, refreshUserProfile } = useAuth();
+  const { currentUser, activeRole, setActiveRole, refreshUserProfile } = useAuth();
 
   // State
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -228,10 +228,8 @@ export const SuperAdminUsersPage: React.FC = () => {
     }
   };
 
-  // Keamanan: Cek hak akses Super Admin berbasis multi-role
-  const isSuperAdmin =
-    hasRole('superadmin') ||
-    (currentUser?.roles && currentUser.roles.includes('superadmin'));
+  // Keamanan: Cek hak akses Super Admin berbasis peran aktif saat ini
+  const isSuperAdmin = activeRole === 'superadmin';
 
   const loadUsers = useCallback(async () => {
     setIsLoading(true);

@@ -137,8 +137,33 @@ export const DataService = {
   // ============================================================
   async getAreas(): Promise<Area[]> {
     if (isFirebaseConfigured && db) {
-      const snap = await getDocs(collection(db, 'areas'));
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() } as Area));
+      try {
+        const snap = await getDocs(collection(db, 'areas'));
+        return snap.docs.map((d) => {
+          const data = d.data();
+          return {
+            ...data,
+            id: d.id,
+            name: data.name || '',
+            category: data.category || 'other',
+            classId: data.classId,
+            building: data.building || '',
+            floor: typeof data.floor === 'number' ? data.floor : 1,
+            description: data.description,
+            isActive: data.isActive !== false,
+            createdAt: data.createdAt || new Date().toISOString(),
+            updatedAt: data.updatedAt || new Date().toISOString(),
+          } as Area;
+        });
+      } catch (error: any) {
+        console.error('[DataService.getAreas] Gagal mengambil data area dari Firestore:', {
+          code: error?.code,
+          message: error?.message,
+          stack: error?.stack,
+          fullError: error,
+        });
+        throw error;
+      }
     }
     return getLocalCollection<Area>(STORAGE_KEYS.areas, seed.INITIAL_AREAS);
   },
@@ -1198,6 +1223,7 @@ export const DataService = {
         email: trimmedEmail,
         displayName: trimmedName,
         role: params.role,
+        roles: [params.role],
         phoneNumber: trimmedPhone,
         isActive: true,
         createdAt: new Date().toISOString(),
@@ -1247,6 +1273,7 @@ export const DataService = {
       email: trimmedEmail,
       displayName: trimmedName,
       role: params.role,
+      roles: [params.role],
       ...(trimmedPhone ? { phoneNumber: trimmedPhone } : {}),
       isActive: true,
       createdAt: new Date().toISOString(),

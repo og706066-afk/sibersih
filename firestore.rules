@@ -23,8 +23,8 @@ service cloud.firestore {
     // Core multi-role checking helper with backward-compatibility & priority enforcement
     function hasRole(targetRole) {
       return isActiveUser() && (
-        ('roles' in getUserData() && getUserData().roles is list)
-          ? getUserData().roles.hasAny([targetRole])
+        ('roles' in getUserData() && getUserData().roles is list && getUserData().roles.size() > 0)
+          ? (getUserData().roles.hasAny([targetRole]) || getUserData().get('role', '') == targetRole)
           : getUserData().get('role', '') == targetRole
       );
     }

@@ -176,6 +176,7 @@ export const InspectionsPage: React.FC = () => {
     text: string;
   } | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [areasError, setAreasError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Search State
@@ -212,9 +213,31 @@ export const InspectionsPage: React.FC = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteModalError, setDeleteModalError] = useState<string | null>(null);
 
+  const availableAreas = useMemo(() => {
+    const active = areas.filter((a) => a && a.isActive !== false);
+    const result = active.length > 0 ? active : areas;
+    return [...result].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [areas]);
+
+  const editAvailableAreas = useMemo(() => {
+    if (!editAreaId) return availableAreas;
+    const exists = availableAreas.some((a) => a.id === editAreaId);
+    if (exists) return availableAreas;
+    const current = areas.find((a) => a.id === editAreaId);
+    return current ? [current, ...availableAreas] : availableAreas;
+  }, [availableAreas, areas, editAreaId]);
+
   const loadData = async () => {
     try {
-      const [insp, ar, vt, pr, cls, viols, pens] = await Promise.all([
+      const [
+        inspResult,
+        arResult,
+        vtResult,
+        prResult,
+        clsResult,
+        violsResult,
+        pensResult,
+      ] = await Promise.allSettled([
         DataService.getInspections(),
         DataService.getAreas(),
         DataService.getViolationTypes(),
@@ -223,7 +246,34 @@ export const InspectionsPage: React.FC = () => {
         DataService.getViolations(),
         DataService.getPenalties(),
       ]);
-      const activeAreas = ar.filter((a) => a.isActive);
+
+      const insp = inspResult.status === 'fulfilled' ? inspResult.value : [];
+      const ar = arResult.status === 'fulfilled' ? arResult.value : [];
+      const vt = vtResult.status === 'fulfilled' ? vtResult.value : [];
+      const pr = prResult.status === 'fulfilled' ? prResult.value : [];
+      const cls = clsResult.status === 'fulfilled' ? clsResult.value : [];
+      const viols = violsResult.status === 'fulfilled' ? violsResult.value : [];
+      const pens = pensResult.status === 'fulfilled' ? pensResult.value : [];
+
+      if (inspResult.status === 'rejected') console.error('Failed to load inspections:', inspResult.reason);
+      if (arResult.status === 'rejected') {
+        const reason: any = arResult.reason;
+        const msg = reason?.message || 'Gagal memuat data area dari Firestore.';
+        console.error('[InspectionsPage.loadData] Gagal memuat areas:', {
+          code: reason?.code,
+          message: msg,
+          error: reason,
+        });
+        setAreasError(msg);
+      } else {
+        setAreasError(null);
+      }
+      if (vtResult.status === 'rejected') console.error('Failed to load violation types:', vtResult.reason);
+      if (prResult.status === 'rejected') console.error('Failed to load penalty rules:', prResult.reason);
+      if (clsResult.status === 'rejected') console.error('Failed to load classes:', clsResult.reason);
+      if (violsResult.status === 'rejected') console.error('Failed to load violations:', violsResult.reason);
+      if (pensResult.status === 'rejected') console.error('Failed to load penalties:', pensResult.reason);
+
       setInspections(insp);
       setAreas(ar);
       setViolationTypes(vt);
@@ -231,8 +281,11 @@ export const InspectionsPage: React.FC = () => {
       setClasses(cls);
       setViolations(viols);
       setPenalties(pens);
-      if (activeAreas.length > 0 && !selectedAreaId) {
-        setSelectedAreaId(activeAreas[0].id);
+
+      const activeAreas = ar.filter((a) => a && a.isActive !== false);
+      const selectableAreas = activeAreas.length > 0 ? activeAreas : ar;
+      if (selectableAreas.length > 0) {
+        setSelectedAreaId((prev) => (prev && selectableAreas.some((a) => a.id === prev) ? prev : selectableAreas[0].id));
       }
     } catch (err) {
       console.error('Failed to load inspections data', err);
@@ -244,6 +297,15 @@ export const InspectionsPage: React.FC = () => {
   useEffect(() => {
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (availableAreas.length > 0) {
+      const exists = availableAreas.some((a) => a.id === selectedAreaId);
+      if (!selectedAreaId || !exists) {
+        setSelectedAreaId(availableAreas[0].id);
+      }
+    }
+  }, [availableAreas, selectedAreaId]);
 
   const handleOpenDetail = async (inspection: Inspection) => {
     setSelectedInspection(inspection);
@@ -515,7 +577,11 @@ export const InspectionsPage: React.FC = () => {
 
   const handleCreateInspection = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedAreaId || isSubmitting) return;
+    if (!selectedAreaId) {
+      setModalError('Silakan pilih Area / Lokasi terlebih dahulu.');
+      return;
+    }
+    if (isSubmitting) return;
 
     if (!currentUser) {
       const authError = 'Sesi login tidak valid. Silakan login kembali.';
@@ -778,6 +844,12 @@ export const InspectionsPage: React.FC = () => {
           leftIcon={<Plus className="w-4 h-4" />}
           onClick={() => {
             setModalError(null);
+            if (availableAreas.length > 0) {
+              const exists = availableAreas.some((a) => a.id === selectedAreaId);
+              if (!selectedAreaId || !exists) {
+                setSelectedAreaId(availableAreas[0].id);
+              }
+            }
             setIsCreateModalOpen(true);
           }}
         >
@@ -942,9 +1014,17 @@ export const InspectionsPage: React.FC = () => {
               label="Pilih Area / Lokasi"
               value={selectedAreaId}
               onChange={(e) => setSelectedAreaId(e.target.value)}
-              options={areas
-                .filter((a) => a.isActive)
-                .map((a) => ({ value: a.id, label: `${a.name} (${a.building})` }))}
+              error={areasError ? `Gagal memuat area: ${areasError}` : undefined}
+              options={
+                areasError
+                  ? [{ value: '', label: `Gagal memuat area (${areasError})` }]
+                  : availableAreas.length === 0
+                  ? [{ value: '', label: isLoading ? 'Memuat data area...' : 'Tidak ada area aktif yang tersedia' }]
+                  : availableAreas.map((a) => ({
+                      value: a.id,
+                      label: `${a.name}${a.building ? ` (${a.building})` : ''}`,
+                    }))
+              }
               required
             />
             <Input
@@ -1184,9 +1264,14 @@ export const InspectionsPage: React.FC = () => {
                 label="Pilih Area / Lokasi"
                 value={editAreaId}
                 onChange={(e) => setEditAreaId(e.target.value)}
-                options={areas
-                  .filter((a) => a.isActive)
-                  .map((a) => ({ value: a.id, label: `${a.name} (${a.building})` }))}
+                options={
+                  editAvailableAreas.length === 0
+                    ? [{ value: '', label: 'Tidak ada area' }]
+                    : editAvailableAreas.map((a) => ({
+                        value: a.id,
+                        label: `${a.name}${a.building ? ` (${a.building})` : ''}`,
+                      }))
+                }
                 required
               />
               <Input

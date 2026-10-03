@@ -21,7 +21,7 @@ import { normalizeUserRoles } from '../../types';
 import type { UserProfile, UserRole } from '../../types';
 
 export const AdminUsersPage: React.FC = () => {
-  const { currentUser, hasRole } = useAuth();
+  const { currentUser, hasRole, activeRole } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -294,7 +294,7 @@ export const AdminUsersPage: React.FC = () => {
       </div>
 
       {/* Tab Navigasi Khusus Super Admin */}
-      {hasRole('superadmin') && (
+      {activeRole === 'superadmin' && (
         <div className="flex border-b border-slate-200">
           <span className="py-2 px-3 text-xs font-bold text-indigo-700 border-b-2 border-indigo-600">
             Akun Pengguna

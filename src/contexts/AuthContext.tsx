@@ -111,6 +111,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (matched && matched.isActive === false) {
             throw new Error('Akun Anda sedang dinonaktifkan oleh Administrator.');
           }
+          if (matched && matched.isActive !== false) {
+            const roles = normalizeUserRoles(matched);
+            const activeUser: UserProfile = {
+              ...matched,
+              roles,
+            };
+            setCurrentUser(activeUser);
+            localStorage.setItem('sibersih_demo_role', roles[0] || 'cleaner');
+            return activeUser;
+          }
         }
       } catch (err: any) {
         if (err?.message?.includes('dinonaktifkan')) {

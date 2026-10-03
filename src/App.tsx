@@ -58,10 +58,11 @@ const RootRedirect: React.FC = () => {
 interface ProtectedRouteProps {
   children?: React.ReactNode;
   allowedRoles?: UserRole[];
+  requireActiveRole?: boolean;
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const { currentUser, isLoading } = useAuth();
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles, requireActiveRole }) => {
+  const { currentUser, isLoading, activeRole } = useAuth();
 
   if (isLoading) {
     return <LoadingState message="Memeriksa autentikasi..." fullScreen />;
@@ -72,6 +73,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles 
   }
 
   if (allowedRoles) {
+    if (requireActiveRole && !allowedRoles.includes(activeRole)) {
+      return <Navigate to="/admin" replace />;
+    }
     const userRoles: UserRole[] =
       currentUser.roles && currentUser.roles.length > 0
         ? currentUser.roles
@@ -137,7 +141,7 @@ export function App() {
             </Route>
 
             {/* Super Admin Route Guard */}
-            <Route element={<ProtectedRoute allowedRoles={['superadmin']} />}>
+            <Route element={<ProtectedRoute allowedRoles={['superadmin']} requireActiveRole />}>
               <Route path="/admin/users/roles" element={<SuperAdminUsersPage />} />
             </Route>
 

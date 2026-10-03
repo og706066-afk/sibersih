@@ -577,17 +577,18 @@ export const DataService = {
         throw new Error('Denda yang sudah dibatalkan tidak dapat dilunasi.');
       }
 
+      const resolvedReceivedById = existing.paidReceivedById || receivedById;
       const updates: Partial<Penalty> = {
         status,
         updatedAt: new Date().toISOString(),
         ...(status === 'paid' && {
           paidAt: existing.paidAt || new Date().toISOString(),
-          paidReceivedById: existing.paidReceivedById || receivedById,
+          ...(resolvedReceivedById ? { paidReceivedById: resolvedReceivedById } : {}),
           receiptNumber: existing.receiptNumber || receiptNumber || `RCP-${Date.now()}`,
         }),
       };
 
-      await updateDoc(penRef, updates);
+      await updateDoc(penRef, sanitizeFirestorePayload(updates));
       return;
     }
 
@@ -606,12 +607,13 @@ export const DataService = {
       throw new Error('Denda yang sudah dibatalkan tidak dapat dilunasi.');
     }
 
+    const resolvedReceivedById = existing.paidReceivedById || receivedById;
     const updates: Partial<Penalty> = {
       status,
       updatedAt: new Date().toISOString(),
       ...(status === 'paid' && {
         paidAt: existing.paidAt || new Date().toISOString(),
-        paidReceivedById: existing.paidReceivedById || receivedById,
+        ...(resolvedReceivedById ? { paidReceivedById: resolvedReceivedById } : {}),
         receiptNumber: existing.receiptNumber || receiptNumber || `RCP-${Date.now()}`,
       }),
     };

@@ -28,7 +28,7 @@ import {
   EmptyState,
 } from '../../components/common';
 import { DataService } from '../../services/dataService';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth, normalizeUserRoles } from '../../contexts/AuthContext';
 import type {
   Area,
   ClassRoom,
@@ -163,7 +163,7 @@ const getMatchingViolationType = (
 };
 
 export const InspectionsPage: React.FC = () => {
-  const { currentUser } = useAuth();
+  const { currentUser, hasRole, hasAnyRole, activeRole } = useAuth();
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
   const [classes, setClasses] = useState<ClassRoom[]>([]);
@@ -321,18 +321,39 @@ export const InspectionsPage: React.FC = () => {
   };
 
   // Helper: Mengecek apakah pengguna berhak mengubah/menghapus inspeksi ini
-  // Sesuai prinsip RBAC: Admin berhak penuh, Cleaner HANYA jika currentUser.role === 'cleaner' DAN inspection.inspectorId === currentUser.uid
+  // Sesuai prinsip RBAC: Admin & Super Admin berhak penuh, Cleaner HANYA jika memiliki role cleaner DAN inspection.inspectorId === currentUser.uid
   const canModifyInspection = (insp: Inspection): boolean => {
     if (!currentUser) return false;
-    if (currentUser.role === 'admin') return true;
+
+    const userRoles = currentUser.roles || normalizeUserRoles(currentUser);
+
+    // 1. Admin dan Super Admin berhak penuh mengedit dan menghapus pemeriksaan
     if (
-      currentUser.role === 'cleaner' &&
+      userRoles.includes('admin') ||
+      userRoles.includes('superadmin') ||
+      hasAnyRole(['admin', 'superadmin']) ||
+      activeRole === 'admin' ||
+      activeRole === 'superadmin'
+    ) {
+      return true;
+    }
+
+    // 2. Cleaner hanya boleh mengedit/menghapus pemeriksaan miliknya sendiri
+    const isCleaner =
+      userRoles.includes('cleaner') ||
+      hasRole('cleaner') ||
+      activeRole === 'cleaner';
+
+    if (
+      isCleaner &&
       Boolean(insp.inspectorId) &&
       Boolean(currentUser.uid) &&
       insp.inspectorId === currentUser.uid
     ) {
       return true;
     }
+
+    // 3. Guru (Teacher) atau peran lain tidak berhak mengubah/menghapus pemeriksaan
     return false;
   };
 

@@ -1,36 +1,38 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { AppShell } from './layouts/AppShell';
-import { LoginPage } from './pages/auth/LoginPage';
 import { LoadingState } from './components/common';
 import type { UserRole } from './types';
 
-// Cleaner Pages
-import { CleanerDashboard } from './pages/cleaner/CleanerDashboard';
-import { InspectionsPage } from './pages/cleaner/InspectionsPage';
-import { ViolationsPage } from './pages/cleaner/ViolationsPage';
-import { PenaltiesPage } from './pages/cleaner/PenaltiesPage';
-import { InventoryPage } from './pages/cleaner/InventoryPage';
-import { CleanerProfilePage } from './pages/cleaner/CleanerProfilePage';
+// Public Auth Page (Lazy)
+const LoginPage = lazy(() => import('./pages/auth/LoginPage').then((m) => ({ default: m.LoginPage })));
 
-// Teacher Pages
-import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
-import { TeacherHistoryPage } from './pages/teacher/TeacherHistoryPage';
-import { TeacherViolationsPage } from './pages/teacher/TeacherViolationsPage';
-import { TeacherReportsPage } from './pages/teacher/TeacherReportsPage';
-import { TeacherProfilePage } from './pages/teacher/TeacherProfilePage';
+// Cleaner Pages (Lazy)
+const CleanerDashboard = lazy(() => import('./pages/cleaner/CleanerDashboard').then((m) => ({ default: m.CleanerDashboard })));
+const InspectionsPage = lazy(() => import('./pages/cleaner/InspectionsPage').then((m) => ({ default: m.InspectionsPage })));
+const ViolationsPage = lazy(() => import('./pages/cleaner/ViolationsPage').then((m) => ({ default: m.ViolationsPage })));
+const PenaltiesPage = lazy(() => import('./pages/cleaner/PenaltiesPage').then((m) => ({ default: m.PenaltiesPage })));
+const InventoryPage = lazy(() => import('./pages/cleaner/InventoryPage').then((m) => ({ default: m.InventoryPage })));
+const CleanerProfilePage = lazy(() => import('./pages/cleaner/CleanerProfilePage').then((m) => ({ default: m.CleanerProfilePage })));
 
-// Admin & Super Admin Pages
-import { AdminDashboard } from './pages/admin/AdminDashboard';
-import { AdminUsersPage } from './pages/admin/AdminUsersPage';
-import { SuperAdminUsersPage } from './pages/admin/SuperAdminUsersPage';
-import { AdminAreasPage } from './pages/admin/AdminAreasPage';
-import { AdminViolationsRulesPage } from './pages/admin/AdminViolationsRulesPage';
-import { AdminPenaltiesPage } from './pages/admin/AdminPenaltiesPage';
-import { AdminReportsPage } from './pages/admin/AdminReportsPage';
-import { AdminSettingsPage } from './pages/admin/AdminSettingsPage';
-import { AdminProfilePage } from './pages/admin/AdminProfilePage';
+// Teacher Pages (Lazy)
+const TeacherDashboard = lazy(() => import('./pages/teacher/TeacherDashboard').then((m) => ({ default: m.TeacherDashboard })));
+const TeacherHistoryPage = lazy(() => import('./pages/teacher/TeacherHistoryPage').then((m) => ({ default: m.TeacherHistoryPage })));
+const TeacherViolationsPage = lazy(() => import('./pages/teacher/TeacherViolationsPage').then((m) => ({ default: m.TeacherViolationsPage })));
+const TeacherReportsPage = lazy(() => import('./pages/teacher/TeacherReportsPage').then((m) => ({ default: m.TeacherReportsPage })));
+const TeacherProfilePage = lazy(() => import('./pages/teacher/TeacherProfilePage').then((m) => ({ default: m.TeacherProfilePage })));
+
+// Admin & Super Admin Pages (Lazy)
+const AdminDashboard = lazy(() => import('./pages/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard })));
+const AdminUsersPage = lazy(() => import('./pages/admin/AdminUsersPage').then((m) => ({ default: m.AdminUsersPage })));
+const SuperAdminUsersPage = lazy(() => import('./pages/admin/SuperAdminUsersPage').then((m) => ({ default: m.SuperAdminUsersPage })));
+const AdminAreasPage = lazy(() => import('./pages/admin/AdminAreasPage').then((m) => ({ default: m.AdminAreasPage })));
+const AdminViolationsRulesPage = lazy(() => import('./pages/admin/AdminViolationsRulesPage').then((m) => ({ default: m.AdminViolationsRulesPage })));
+const AdminPenaltiesPage = lazy(() => import('./pages/admin/AdminPenaltiesPage').then((m) => ({ default: m.AdminPenaltiesPage })));
+const AdminReportsPage = lazy(() => import('./pages/admin/AdminReportsPage').then((m) => ({ default: m.AdminReportsPage })));
+const AdminSettingsPage = lazy(() => import('./pages/admin/AdminSettingsPage').then((m) => ({ default: m.AdminSettingsPage })));
+const AdminProfilePage = lazy(() => import('./pages/admin/AdminProfilePage').then((m) => ({ default: m.AdminProfilePage })));
 
 const RootRedirect: React.FC = () => {
   const { currentUser, isLoading, activeRole } = useAuth();
@@ -99,16 +101,21 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles,
     }
   }
 
-  return children ? <>{children}</> : <Outlet />;
+  return (
+    <Suspense fallback={<LoadingState message="Memuat modul halaman..." />}>
+      {children ? <>{children}</> : <Outlet />}
+    </Suspense>
+  );
 };
 
 export function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <Routes>
-          {/* Public Login Route */}
-          <Route path="/login" element={<LoginPage />} />
+        <Suspense fallback={<LoadingState message="Memuat aplikasi SIBERSIH..." fullScreen />}>
+          <Routes>
+            {/* Public Login Route */}
+            <Route path="/login" element={<LoginPage />} />
 
           {/* Root Redirector */}
           <Route path="/" element={<RootRedirect />} />
@@ -161,7 +168,8 @@ export function App() {
           {/* Catch All */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </BrowserRouter>
+      </Suspense>
+    </BrowserRouter>
     </AuthProvider>
   );
 }
